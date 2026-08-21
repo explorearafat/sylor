@@ -19,11 +19,11 @@ export const GeometricReveal: React.FC<GeometricRevealProps> = ({
   children,
   className = '',
   delayMs = 0,
-  durationMs = 700,
+  durationMs = 500,
   direction = 'up',
-  distancePx = 24,
-  threshold = 0.1,
-  rootMargin = '0px 0px -40px 0px',
+  distancePx = 16,
+  threshold = 0.05,
+  rootMargin = '0px 0px 50px 0px',
   triggerOnce = true,
   as: Component = 'div',
   id,
@@ -54,11 +54,7 @@ export const GeometricReveal: React.FC<GeometricRevealProps> = ({
   const style: React.CSSProperties = {
     opacity: isVisible ? 1 : 0,
     transform: isVisible ? 'translate3d(0, 0, 0)' : getInitialTransform(),
-    transitionProperty: 'opacity, transform',
-    transitionDuration: `${durationMs}ms`,
-    transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
-    transitionDelay: `${delayMs}ms`,
-    willChange: 'opacity, transform',
+    transition: `opacity ${durationMs}ms cubic-bezier(0.16, 1, 0.3, 1) ${delayMs}ms, transform ${durationMs}ms cubic-bezier(0.16, 1, 0.3, 1) ${delayMs}ms`,
   };
 
   return (
@@ -66,7 +62,7 @@ export const GeometricReveal: React.FC<GeometricRevealProps> = ({
       ref={ref}
       id={id}
       style={style}
-      className={`transition-all ${className}`}
+      className={className}
     >
       {children}
     </Component>

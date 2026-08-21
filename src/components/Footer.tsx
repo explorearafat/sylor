@@ -14,7 +14,7 @@ export const Footer: React.FC = () => {
       className="py-8 border-t border-[#e8e6e2] bg-[#faf9f7] text-[12px] font-mono text-[#8a8880]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-        {/* Brand and Copyright */}
+        
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <SylorLogo size={20} showBubbles={false} />
@@ -28,7 +28,7 @@ export const Footer: React.FC = () => {
           <span className="hidden sm:inline">The Architecture of Intent</span>
         </div>
 
-        {/* Status and Back to Top */}
+        
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-1.5 text-[#5e5d58]">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>

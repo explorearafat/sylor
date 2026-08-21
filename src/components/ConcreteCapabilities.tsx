@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CONCRETE_CAPABILITY_CATEGORIES } from '../data';
-import { ArrowRight, Code2, Sparkles, Terminal, CheckCircle2, ChevronRight } from 'lucide-react';
+import { CheckCircle2, ChevronRight } from 'lucide-react';
 
 export const ConcreteCapabilities: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>(CONCRETE_CAPABILITY_CATEGORIES[0].id);
@@ -16,7 +16,7 @@ export const ConcreteCapabilities: React.FC = () => {
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#faf9f7]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header */}
+        
         <div className="max-w-[760px] mb-16">
           <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#737373] block mb-3">
             Concrete Capabilities
@@ -32,7 +32,7 @@ export const ConcreteCapabilities: React.FC = () => {
           </p>
         </div>
 
-        {/* Category Tabs Strip */}
+        
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 pb-6 border-b border-[#e8e6e2]">
           {CONCRETE_CAPABILITY_CATEGORIES.map((cat) => {
             const isSelected = activeCategory === cat.id;

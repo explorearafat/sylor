@@ -1,12 +1,12 @@
 import React from 'react';
-import { Download, ArrowRight, BookOpen, Github, Layers, ShieldCheck } from 'lucide-react';
+import { ExternalLink, BookOpen, Github, Layers } from 'lucide-react';
 import { SylorLogo } from './SylorLogo';
 
 interface FinalInstallSectionProps {
-  onOpenDownloadModal: () => void;
+  onOpenDownloadModal?: () => void;
 }
 
-export const FinalInstallSection: React.FC<FinalInstallSectionProps> = ({ onOpenDownloadModal }) => {
+export const FinalInstallSection: React.FC<FinalInstallSectionProps> = () => {
   return (
     <section
       id="install"
@@ -31,25 +31,27 @@ export const FinalInstallSection: React.FC<FinalInstallSectionProps> = ({ onOpen
           </p>
 
           <p className="text-[14px] text-[#737373] max-w-[520px] mx-auto leading-relaxed">
-            Download the native binary to start working with project-aware agent intelligence on your local codebase today.
+            Try the live web agent to start working with project-aware agent intelligence on your local codebase today.
           </p>
 
-          {/* Primary Action Button */}
+          
           <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button
-              onClick={onOpenDownloadModal}
+            <a
+              href="https://trysylor.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-4 text-[14px] font-mono font-bold uppercase tracking-wider text-[#faf9f7] bg-[#111111] rounded-[6px] hover:bg-[#2c2b29] transition-all shadow-[0_4px_16px_rgba(0,0,0,0.12)] focus:outline-none"
             >
-              <Download className="w-4 h-4" />
-              <span>Install Sylor</span>
-            </button>
+              <span>Test Sylor</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
           </div>
 
           <div className="text-[12px] font-mono text-[#737373]">
             Available for Windows, macOS and Linux. Free during preview.
           </div>
 
-          {/* Secondary Links Bar */}
+          
           <div className="pt-8 border-t border-[#e8e6e2] flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-[13px] text-[#555]">
             <a
               href="#capabilities"

@@ -1,9 +1,9 @@
 import React from 'react';
-import { Download, BookOpen, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ExternalLink, BookOpen, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
 import { SylorLogo } from './SylorLogo';
 
 interface OneMoreThingProps {
-  onOpenDownloadModal: () => void;
+  onOpenDownloadModal?: () => void;
 }
 
 export const OneMoreThingSection: React.FC<OneMoreThingProps> = ({ onOpenDownloadModal }) => {
@@ -42,7 +42,7 @@ export const OneMoreThingSection: React.FC<OneMoreThingProps> = ({ onOpenDownloa
             Sylor is designed to be configured around you. Now bring the same clarity, speed, and safety into your actual local repository.
           </p>
 
-          {/* 6 Pillars Grid */}
+          
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-left mb-12">
             {PILLARS.map((p, i) => (
               <div
@@ -59,15 +59,17 @@ export const OneMoreThingSection: React.FC<OneMoreThingProps> = ({ onOpenDownloa
             ))}
           </div>
 
-          {/* Action CTAs */}
+          
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button
-              onClick={onOpenDownloadModal}
+            <a
+              href="https://trysylor.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-[13px] font-mono font-bold uppercase tracking-wider text-[#111111] bg-white rounded-[6px] hover:bg-[#eae7df] transition-all shadow-md focus:outline-none"
             >
-              <Download className="w-4 h-4" />
-              <span>Install Sylor</span>
-            </button>
+              <span>Test Sylor</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
 
             <a
               href="#architecture"

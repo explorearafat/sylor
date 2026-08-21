@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, BookOpen, Github, Layers, Apple, Monitor, Cpu, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ExternalLink, BookOpen, Github, Layers, Apple, Monitor, Cpu } from 'lucide-react';
 import { SylorLogo } from './SylorLogo';
 
 interface HeroProps {
@@ -14,7 +14,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenDownloadModal, onOpenConfig })
       aria-labelledby="hero-title"
       className="relative pt-32 md:pt-44 pb-20 md:pb-28 max-w-[1200px] mx-auto px-6 md:px-8 border-b border-[#e8e6e2]"
     >
-      {/* Top subtle metadata line */}
+      
       <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] font-mono text-[#8a8880] border-b border-[#e8e6e2] pb-4 mb-12">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-[#141413] font-medium uppercase tracking-wider">
@@ -31,7 +31,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenDownloadModal, onOpenConfig })
         </div>
       </div>
 
-      {/* Main Hero Header Area */}
+      
       <div className="max-w-[880px]">
         <div className="inline-flex items-center gap-2 mb-6">
           <SylorLogo size={32} showBubbles={false} />
@@ -52,20 +52,22 @@ export const Hero: React.FC<HeroProps> = ({ onOpenDownloadModal, onOpenConfig })
         </p>
 
         <p className="text-[16px] sm:text-[18px] text-[#63615a] max-w-[680px] leading-relaxed font-normal mb-10">
-          Download the native binary to start working with project-aware agent intelligence on your local codebase today.
+          Try the live web agent to start working with project-aware agent intelligence on your local codebase today.
         </p>
 
-        {/* Action CTAs */}
+        
         <div className="space-y-6">
           <div className="flex flex-wrap items-center gap-4">
-            <button
+            <a
               id="hero-install-btn"
-              onClick={onOpenDownloadModal}
+              href="https://trysylor.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2.5 px-8 py-4 text-[14px] font-mono font-bold uppercase tracking-wider text-[#faf9f7] bg-[#141413] rounded-[6px] hover:bg-[#2b2a28] transition-all shadow-[0_4px_16px_rgba(0,0,0,0.12)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#141413]"
             >
-              <Download className="w-4 h-4" />
-              <span>Install Sylor</span>
-            </button>
+              <span>Test Sylor</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
 
             {onOpenConfig && (
               <button
@@ -82,7 +84,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenDownloadModal, onOpenConfig })
             Available for Windows, macOS and Linux. Free during preview.
           </div>
 
-          {/* Secondary Links Bar */}
+          
           <div className="pt-6 border-t border-[#e8e6e2] flex flex-wrap items-center gap-6 sm:gap-10 text-[14px] text-[#555]">
             <a
               href="#capabilities"
@@ -111,7 +113,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenDownloadModal, onOpenConfig })
             </a>
           </div>
 
-          {/* Platform Badges */}
+          
           <div className="flex items-center gap-4 text-[12px] font-mono text-[#8a8880] pt-2">
             <span className="flex items-center gap-1.5 hover:text-[#141413] transition-colors">
               <Apple className="w-3.5 h-3.5" /> macOS (Apple Silicon / Intel)

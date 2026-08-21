@@ -10,20 +10,20 @@ export const DeveloperSection: React.FC = () => {
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
         <div className="max-w-[700px]">
-          {/* Subtle Metadata */}
+          
           <span className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#8a8880] block mb-3">
             Origin
           </span>
 
-          {/* 2-3 lines statement */}
+          
           <p className="text-[17px] sm:text-[18px] text-[#2c2b28] leading-[1.65]">
             Built independently by <strong className="font-semibold text-[#141413]">Arafat</strong> — a developer
             exploring AI agents, automation, cybersecurity, and the future of software development.
           </p>
 
-          {/* Compact Social Links */}
+          
           <div className="mt-6 flex flex-wrap items-center gap-6 text-[13px] font-mono">
-            {/* Instagram */}
+            
             <a
               href="https://instagram.com/explorearafat"
               target="_blank"
@@ -35,7 +35,7 @@ export const DeveloperSection: React.FC = () => {
               <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
             </a>
 
-            {/* Facebook */}
+            
             <a
               href="https://facebook.com/exploreeyasin"
               target="_blank"
@@ -47,7 +47,7 @@ export const DeveloperSection: React.FC = () => {
               <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
             </a>
 
-            {/* GitHub */}
+            
             <a
               href="https://github.com/explorearafat"
               target="_blank"

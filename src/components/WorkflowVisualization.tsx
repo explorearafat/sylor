@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { WORKFLOW_NODES } from '../data';
 import { WorkflowNodeData } from '../types';
-import { Play, Pause, RotateCcw, ArrowRight, CheckCircle2, ChevronRight, CornerDownRight } from 'lucide-react';
+import { Play, Pause, RotateCcw, ChevronRight } from 'lucide-react';
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
 
 export const WorkflowVisualization: React.FC = () => {
@@ -24,7 +24,7 @@ export const WorkflowVisualization: React.FC = () => {
           const next = (prev + 1) % WORKFLOW_NODES.length;
           setSelectedNode(WORKFLOW_NODES[next]);
           if (next === WORKFLOW_NODES.length - 1) {
-            // Finished simulation loop
+            
             setTimeout(() => setIsSimulating(false), 2200);
           }
           return next;
@@ -58,7 +58,7 @@ export const WorkflowVisualization: React.FC = () => {
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#fbfaf8]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header with Intersection Animation */}
+        
         <div
           className={`flex flex-col md:flex-row md:items-end justify-between gap-6 pb-12 border-b border-[#e8e6e2] transition-all duration-700 ${
             isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
@@ -295,4 +295,3 @@ export const WorkflowVisualization: React.FC = () => {
     </section>
   );
 };
-

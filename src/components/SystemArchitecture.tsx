@@ -43,7 +43,7 @@ export const SystemArchitecture: React.FC = () => {
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#fbfaf8]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header */}
+        
         <div className="max-w-[760px] mb-16">
           <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#737373] block mb-3">
             System Design
@@ -59,9 +59,9 @@ export const SystemArchitecture: React.FC = () => {
           </p>
         </div>
 
-        {/* System Flow Diagram */}
+        
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Architecture Blocks Map (col-span-7) */}
+          
           <div className="lg:col-span-7 space-y-3">
             {ARCHITECTURE_COMPONENTS.map((comp) => {
               const isSelected = comp.id === selectedBlockId;

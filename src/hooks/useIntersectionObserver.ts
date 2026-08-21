@@ -9,8 +9,8 @@ interface UseIntersectionObserverOptions {
 export function useIntersectionObserver(
   targetRef: RefObject<HTMLElement | null>,
   {
-    threshold = 0.12,
-    rootMargin = '0px 0px -50px 0px',
+    threshold = 0.05,
+    rootMargin = '0px 0px 60px 0px',
     triggerOnce = true,
   }: UseIntersectionObserverOptions = {}
 ): boolean {
@@ -20,7 +20,6 @@ export function useIntersectionObserver(
     const node = targetRef?.current;
     if (!node) return;
 
-    // Support reduced motion preference
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setIsVisible(true);
       return;

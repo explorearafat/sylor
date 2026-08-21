@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Copy, CheckCheck, FileCode2, Terminal, Shield, Check } from 'lucide-react';
+import { X, Copy, CheckCheck, Shield } from 'lucide-react';
 
 interface AgentManifestModalProps {
   isOpen: boolean;
@@ -98,7 +98,7 @@ verification_loop:
         className="bg-[#faf9f7] border border-[#d8d5cb] rounded-[12px] w-full max-w-[680px] shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
+        
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#e8e6e2] bg-[#f5f3ee]">
           <div className="flex items-center gap-2.5">
             <div className="w-5 h-5 rounded bg-[#141413] text-[#faf9f7] text-[10px] font-mono flex items-center justify-center font-bold">
@@ -123,7 +123,7 @@ verification_loop:
           </button>
         </div>
 
-        {/* Tab selector & Copy button */}
+        
         <div className="flex items-center justify-between px-6 py-2.5 bg-[#f0ede6] border-b border-[#e2ded6]">
           <div className="flex items-center gap-2">
             <button

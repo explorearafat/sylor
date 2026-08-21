@@ -97,7 +97,7 @@ $ sylor doctor
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#faf9f7]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header */}
+        
         <div className="max-w-[720px] mb-12">
           <span className="text-[11px] font-mono font-bold uppercase tracking-[0.2em] text-[#737373] block mb-3">
             Open Ecosystem
@@ -113,7 +113,7 @@ $ sylor doctor
           </p>
         </div>
 
-        {/* Tab Switcher */}
+        
         <div className="flex flex-wrap gap-2 mb-8 border-b border-[#e8e6e2] pb-4">
           <button
             onClick={() => setActiveTab('mcp')}

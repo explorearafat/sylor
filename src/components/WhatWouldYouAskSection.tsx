@@ -14,7 +14,7 @@ export const WhatWouldYouAskSection: React.FC<WhatWouldYouAskProps> = ({ onSelec
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#fbfaf8]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header */}
+        
         <div className="max-w-[720px] mb-12">
           <span className="text-[11px] font-mono font-bold uppercase tracking-[0.2em] text-[#737373] block mb-3">
             Real Prompts
@@ -30,7 +30,7 @@ export const WhatWouldYouAskSection: React.FC<WhatWouldYouAskProps> = ({ onSelec
           </p>
         </div>
 
-        {/* Prompts Grid */}
+        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {CURATED_QUESTIONS.map((item) => (
             <div

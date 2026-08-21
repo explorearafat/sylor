@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Download, Terminal, Check, Copy, Monitor, Apple, Cpu, ShieldCheck } from 'lucide-react';
+import { X, Download, ExternalLink, Terminal, Check, Copy, Monitor, Apple, Cpu, ShieldCheck } from 'lucide-react';
 import { INSTALL_PLATFORMS } from '../data';
 import { SylorLogo } from './SylorLogo';
 
@@ -47,7 +47,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
         className="w-full max-w-[620px] bg-[#faf9f7] border border-[#e8e6e2] rounded-[10px] shadow-[0_20px_50px_rgba(0,0,0,0.15)] overflow-hidden text-[#111111]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#e8e6e2] bg-[#f4f2ee]">
           <div className="flex items-center gap-2.5">
             <SylorLogo size={20} showBubbles={false} />
@@ -68,18 +68,40 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           </button>
         </div>
 
-        {/* Content Body */}
+        
         <div className="p-6 sm:p-8 space-y-6">
+          
+          <div className="p-4 bg-white border border-[#e8e6e2] rounded-[8px] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div>
+              <div className="text-[13px] font-semibold text-[#111111] flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span>Test Sylor Live in Browser</span>
+              </div>
+              <p className="text-[12px] text-[#737373] mt-0.5">
+                Instant access at trysylor.vercel.app with zero configuration.
+              </p>
+            </div>
+            <a
+              href="https://trysylor.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-[11px] font-mono font-bold uppercase tracking-wider text-[#faf9f7] bg-[#111111] hover:bg-[#2c2b29] rounded-[4px] transition-all shrink-0"
+            >
+              <span>Open trysylor</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+
           <div>
-            <h3 id="download-modal-title" className="text-[20px] font-semibold tracking-tight text-[#111111]">
-              Choose your operating system
+            <h3 id="download-modal-title" className="text-[16px] font-semibold tracking-tight text-[#111111]">
+              Or download native desktop binary
             </h3>
-            <p className="text-[14px] text-[#737373] mt-1 leading-relaxed">
+            <p className="text-[13px] text-[#737373] mt-1 leading-relaxed">
               Sylor runs as a native, secure desktop agent that connects directly to your local editor and workspace.
             </p>
           </div>
 
-          {/* Platform Switcher Tabs */}
+          
           <div className="grid grid-cols-3 gap-2 p-1 bg-[#f4f2ee] rounded-[6px] border border-[#e8e6e2]">
             <button
               onClick={() => setSelectedPlatform('windows')}

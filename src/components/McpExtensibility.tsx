@@ -8,11 +8,7 @@ import {
   Database, 
   Box, 
   Activity, 
-  Check, 
-  Plus, 
-  Terminal, 
   Cpu,
-  Layers,
   Copy,
   CheckCheck
 } from 'lucide-react';

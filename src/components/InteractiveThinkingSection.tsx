@@ -54,7 +54,7 @@ export const InteractiveThinkingSection: React.FC = () => {
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#faf9f7]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header */}
+        
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-12 border-b border-[#e8e6e2]">
           <div>
             <span className="text-[11px] font-mono font-bold uppercase tracking-[0.2em] text-[#737373] block mb-3">
@@ -71,7 +71,7 @@ export const InteractiveThinkingSection: React.FC = () => {
             </p>
           </div>
 
-          {/* Task selector pills */}
+          
           <div className="flex flex-wrap gap-2">
             {THINKING_TASKS.map((task) => (
               <button

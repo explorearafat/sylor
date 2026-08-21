@@ -1,50 +1,72 @@
 import React, { useState, useEffect } from 'react';
-import { Download, ArrowUpRight, Cpu } from 'lucide-react';
+import { Search, ExternalLink } from 'lucide-react';
 import { SylorLogo } from './SylorLogo';
 
 interface NavigationProps {
   onOpenConfig?: () => void;
   onOpenDownloadModal?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
-export const Navigation: React.FC<NavigationProps> = ({ onOpenConfig, onOpenDownloadModal }) => {
+export const Navigation: React.FC<NavigationProps> = ({
+  onOpenCommandPalette,
+}) => {
   const [scrolled, setScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState('hero');
 
   useEffect(() => {
+    let ticking = false;
+    let lastSection = 'hero';
+
+    const sections = [
+      'hero',
+      'vm-inspector',
+      'quick-start',
+      'capabilities',
+      'product-gallery',
+      'scenarios',
+      'how-sylor-thinks',
+      'workflow',
+      'workflow-story',
+      'architecture',
+      'extensibility',
+      'philosophy',
+      'developers',
+      'trust-and-purpose',
+      'install'
+    ];
+
     const handleScroll = () => {
-      setScrolled(window.scrollY > 30);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const isScrolled = window.scrollY > 25;
+          setScrolled((prev) => (prev !== isScrolled ? isScrolled : prev));
 
-      const sections = [
-        'hero',
-        'quick-start',
-        'capabilities',
-        'product-gallery',
-        'scenarios',
-        'how-sylor-thinks',
-        'workflow',
-        'workflow-story',
-        'architecture',
-        'extensibility',
-        'philosophy',
-        'developers',
-        'trust-and-purpose',
-        'install'
-      ];
-
-      for (const sectionId of [...sections].reverse()) {
-        const el = document.getElementById(sectionId);
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          if (rect.top <= 200) {
-            setActiveSection(sectionId);
-            break;
+          let currentSection = 'hero';
+          for (let i = sections.length - 1; i >= 0; i--) {
+            const el = document.getElementById(sections[i]);
+            if (el) {
+              const top = el.offsetTop;
+              if (window.scrollY >= top - 250) {
+                currentSection = sections[i];
+                break;
+              }
+            }
           }
-        }
+
+          if (currentSection !== lastSection) {
+            lastSection = currentSection;
+            setActiveSection(currentSection);
+          }
+
+          ticking = false;
+        });
+        ticking = true;
       }
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -81,12 +103,12 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenConfig, onOpenDown
         {/* Links with Geometric uppercase tracking */}
         <div className="hidden md:flex items-center space-x-7 text-[12px] font-medium text-[#737373] uppercase tracking-widest">
           <button
-            onClick={() => scrollTo('product-gallery')}
+            onClick={() => scrollTo('vm-inspector')}
             className={`transition-colors hover:text-[#111111] focus:outline-none ${
-              activeSection === 'product-gallery' ? 'text-[#111111] border-b border-[#111111] pb-0.5' : ''
+              activeSection === 'vm-inspector' ? 'text-[#111111] border-b border-[#111111] pb-0.5' : ''
             }`}
           >
-            Product
+            Runtime
           </button>
           <button
             onClick={() => scrollTo('capabilities')}
@@ -131,25 +153,30 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenConfig, onOpenDown
         </div>
 
         {/* Right CTA */}
-        <div className="flex items-center gap-3">
-          {onOpenConfig && (
+        <div className="flex items-center gap-2.5">
+          <a
+            href="https://trysylor.vercel.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-[#faf9f7] bg-[#141413] hover:bg-[#2b2a28] rounded-[5px] transition-all shadow-xs"
+          >
+            <span>Test Sylor</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
+
+          {onOpenCommandPalette && (
             <button
-              onClick={onOpenConfig}
-              className="hidden lg:flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-[#737373] hover:text-[#111111] transition-colors px-2.5 py-1 rounded border border-[#e8e6e2] hover:bg-[#f3f1ed]"
-              title="Inspect agent configuration schema"
+              onClick={onOpenCommandPalette}
+              className="flex items-center gap-1.5 text-[11px] font-mono text-[#737373] hover:text-[#111111] transition-colors px-2.5 py-1.5 rounded border border-[#e8e6e2] hover:bg-[#f3f1ed] bg-[#faf9f7]"
+              title="Open command palette (⌘K)"
             >
-              <Cpu className="w-3 h-3" />
-              <span>Manifest</span>
+              <Search className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Search</span>
+              <kbd className="hidden sm:inline text-[9px] bg-[#edeae3] px-1.5 py-0.5 rounded text-[#555]">
+                ⌘K
+              </kbd>
             </button>
           )}
-
-          <button
-            onClick={onOpenDownloadModal || (() => scrollTo('install'))}
-            className="group inline-flex items-center gap-1.5 px-4 py-2 text-[12px] font-mono font-bold uppercase tracking-wider text-[#faf9f7] bg-[#111111] rounded-[4px] hover:bg-[#2c2b29] transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-[#111111] shadow-sm"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Install Sylor</span>
-          </button>
         </div>
       </div>
     </nav>

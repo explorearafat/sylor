@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { REAL_USER_SCENARIOS } from '../data';
-import { CheckCircle2, FileCode, Play, Terminal, Wrench, ShieldCheck, ArrowRight } from 'lucide-react';
+import { FileCode, ShieldCheck } from 'lucide-react';
 
 export const RealScenarios: React.FC = () => {
   const [activeScenarioId, setActiveScenarioId] = useState<string>(REAL_USER_SCENARIOS[0].id);
@@ -15,7 +15,7 @@ export const RealScenarios: React.FC = () => {
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#faf9f7]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header */}
+        
         <div className="max-w-[760px] mb-14">
           <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#737373] block mb-3">
             Real Developer Scenarios
@@ -31,7 +31,7 @@ export const RealScenarios: React.FC = () => {
           </p>
         </div>
 
-        {/* Scenario Switcher Tabs */}
+        
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 pb-6 border-b border-[#e8e6e2]">
           {REAL_USER_SCENARIOS.map((scenario) => {
             const isSelected = scenario.id === activeScenarioId;

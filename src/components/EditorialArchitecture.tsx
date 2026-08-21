@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, ShieldCheck, Binary, Cpu, Workflow, TerminalSquare, Compass } from 'lucide-react';
+import { ShieldCheck, Cpu, Compass } from 'lucide-react';
 
 export const EditorialArchitecture: React.FC = () => {
   return (
@@ -9,7 +9,7 @@ export const EditorialArchitecture: React.FC = () => {
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#fbfaf8]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header */}
+        
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-12 border-b border-[#e8e6e2]">
           <div>
             <span className="text-[12px] font-mono uppercase tracking-[0.18em] text-[#8a8880] block mb-3">
@@ -24,11 +24,11 @@ export const EditorialArchitecture: React.FC = () => {
           </p>
         </div>
 
-        {/* Large Editorial Architectural Diagram */}
+        
         <div className="mt-12 bg-[#f3f1ed] border border-[#e2dfd7] rounded-[16px] p-8 md:p-12 relative overflow-hidden">
-          {/* Architectural Layer Diagram Grid */}
+          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
-            {/* Layer 1 */}
+            
             <div className="bg-[#faf9f7] border border-[#e4e1d8] rounded-[10px] p-6 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between text-[11px] font-mono text-[#8a8880] mb-4">
@@ -50,7 +50,7 @@ export const EditorialArchitecture: React.FC = () => {
               </div>
             </div>
 
-            {/* Layer 2 (Central Engine) */}
+            
             <div className="bg-[#141413] text-[#faf9f7] border border-[#141413] rounded-[10px] p-6 flex flex-col justify-between shadow-md">
               <div>
                 <div className="flex items-center justify-between text-[11px] font-mono text-[#9e9c94] mb-4">
@@ -72,7 +72,7 @@ export const EditorialArchitecture: React.FC = () => {
               </div>
             </div>
 
-            {/* Layer 3 */}
+            
             <div className="bg-[#faf9f7] border border-[#e4e1d8] rounded-[10px] p-6 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between text-[11px] font-mono text-[#8a8880] mb-4">
@@ -95,7 +95,7 @@ export const EditorialArchitecture: React.FC = () => {
             </div>
           </div>
 
-          {/* Architectural Notes Footer */}
+          
           <div className="mt-10 pt-8 border-t border-[#e2dfd7] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 text-[13px]">
             <div>
               <span className="font-mono text-[11px] uppercase text-[#8a8880] block mb-1">

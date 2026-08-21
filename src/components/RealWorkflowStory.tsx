@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { WORKFLOW_STORY_STEPS } from '../data';
-import { Check, ChevronRight, FileCode, CheckCircle2, Terminal } from 'lucide-react';
+import { ChevronRight, FileCode, CheckCircle2 } from 'lucide-react';
 
 export const RealWorkflowStory: React.FC = () => {
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
@@ -14,7 +14,7 @@ export const RealWorkflowStory: React.FC = () => {
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#faf9f7]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header */}
+        
         <div className="max-w-[760px] mb-14">
           <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#737373] block mb-3">
             Case Study Walkthrough
@@ -30,7 +30,7 @@ export const RealWorkflowStory: React.FC = () => {
           </p>
         </div>
 
-        {/* Step Progress Bar */}
+        
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pb-6 border-b border-[#e8e6e2]">
           {WORKFLOW_STORY_STEPS.map((step, idx) => {
             const isSelected = idx === activeStepIndex;

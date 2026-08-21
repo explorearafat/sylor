@@ -49,7 +49,7 @@ export const ProductGallery: React.FC = () => {
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#fbfaf8]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header */}
+        
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-12 border-b border-[#e8e6e2]">
           <div className="max-w-[700px]">
             <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#737373] block mb-3">
@@ -71,7 +71,7 @@ export const ProductGallery: React.FC = () => {
           </div>
         </div>
 
-        {/* Screen Switcher Tabs */}
+        
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mt-10 pb-6 border-b border-[#e8e6e2]">
           {PRODUCT_UI_SCREENS.map((screen) => {
             const isSelected = screen.id === activeScreenId;

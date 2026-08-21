@@ -62,7 +62,7 @@ export const MiniProjectExplorer: React.FC = () => {
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#faf9f7]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header */}
+        
         <div className="max-w-[720px] mb-12">
           <span className="text-[11px] font-mono font-bold uppercase tracking-[0.2em] text-[#737373] block mb-3">
             Context Grounding
@@ -78,9 +78,9 @@ export const MiniProjectExplorer: React.FC = () => {
           </p>
         </div>
 
-        {/* Interactive Explorer Grid */}
+        
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left: Interactive File Tree (col-span-5) */}
+          
           <div className="lg:col-span-5 bg-white border border-[#e8e6e2] rounded-[10px] p-5 shadow-sm">
             <div className="flex items-center justify-between text-[11px] font-mono text-[#737373] border-b border-[#f0eee9] pb-3 mb-4">
               <span className="font-semibold text-[#111111] uppercase tracking-wider flex items-center gap-1.5">

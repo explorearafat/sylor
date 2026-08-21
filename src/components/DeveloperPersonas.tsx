@@ -1,13 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { DEVELOPER_PERSONAS } from '../data';
-import { Sparkles, Shield, Compass, Terminal, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Sparkles, Shield, Compass, Terminal } from 'lucide-react';
 
 export const DeveloperPersonas: React.FC = () => {
-  const [activePersonaId, setActivePersonaId] = useState<string>(DEVELOPER_PERSONAS[0].id);
-
-  const activePersona =
-    DEVELOPER_PERSONAS.find((p) => p.id === activePersonaId) || DEVELOPER_PERSONAS[0];
-
   const getPersonaIcon = (id: string) => {
     switch (id) {
       case 'persona-builder':
@@ -23,6 +18,33 @@ export const DeveloperPersonas: React.FC = () => {
     }
   };
 
+  const personaNotes = [
+    {
+      ...DEVELOPER_PERSONAS[0],
+      noteColor: 'bg-[#fef9c3] border-[#fde047]', 
+      pinColor: 'from-[#ef4444] via-[#dc2626] to-[#991b1b]',
+      tilt: '-rotate-1',
+    },
+    {
+      ...DEVELOPER_PERSONAS[1],
+      noteColor: 'bg-[#e0f2fe] border-[#bae6fd]', 
+      pinColor: 'from-[#3b82f6] via-[#2563eb] to-[#1d4ed8]',
+      tilt: 'rotate-1',
+    },
+    {
+      ...DEVELOPER_PERSONAS[2],
+      noteColor: 'bg-[#f3e8ff] border-[#e9d5ff]', 
+      pinColor: 'from-[#a855f7] via-[#9333ea] to-[#7e22ce]',
+      tilt: '-rotate-1',
+    },
+    {
+      ...DEVELOPER_PERSONAS[3],
+      noteColor: 'bg-[#ffedd5] border-[#fed7aa]', 
+      pinColor: 'from-[#f97316] via-[#ea580c] to-[#c2410c]',
+      tilt: 'rotate-1.5',
+    },
+  ];
+
   return (
     <section
       id="developers"
@@ -30,9 +52,9 @@ export const DeveloperPersonas: React.FC = () => {
       className="py-24 md:py-36 border-t border-[#e8e6e2] bg-[#faf9f7]"
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-8">
-        {/* Section Header */}
+        
         <div className="max-w-[760px] mb-14">
-          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#737373] block mb-3">
+          <span className="text-[11px] font-bold font-mono uppercase tracking-[0.2em] text-[#737373] block mb-3">
             Developer Fit
           </span>
           <h2
@@ -46,78 +68,77 @@ export const DeveloperPersonas: React.FC = () => {
           </p>
         </div>
 
-        {/* Persona Switcher Tabs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pb-6 border-b border-[#e8e6e2]">
-          {DEVELOPER_PERSONAS.map((persona) => {
-            const isSelected = persona.id === activePersonaId;
+        
+        <div className="space-y-6">
+          {personaNotes.map((persona, i) => {
+            const isLeft = i % 2 === 0;
+
             return (
-              <button
+              <div
                 key={persona.id}
-                onClick={() => setActivePersonaId(persona.id)}
-                className={`p-4 text-left rounded-[6px] transition-all border ${
-                  isSelected
-                    ? 'bg-white border-[#111111] text-[#111111] shadow-[0_2px_8px_rgba(0,0,0,0.04)] font-semibold'
-                    : 'bg-[#f4f2ee] border-transparent text-[#737373] hover:text-[#111111] hover:border-[#e8e6e2]'
-                }`}
+                className={`flex ${isLeft ? 'justify-start sm:pr-16 md:pr-28' : 'justify-end sm:pl-16 md:pl-28'}`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-mono font-bold uppercase text-[#737373]">
-                    {persona.tagline}
-                  </span>
-                  <span className={isSelected ? 'text-[#111111]' : 'text-[#737373]'}>
-                    {getPersonaIcon(persona.id)}
-                  </span>
+                <div
+                  className={`relative w-full sm:w-[94%] p-5 pt-6 rounded-[3px] border transition-all duration-200 shadow-[0_8px_20px_rgba(0,0,0,0.06)] hover:shadow-[0_14px_30px_rgba(0,0,0,0.12)] hover:scale-[1.01] ${persona.noteColor} ${persona.tilt} hover:rotate-0`}
+                >
+                  {/* Pushpin */}
+                  <div className="absolute -top-2.5 left-6 z-20 flex flex-col items-center pointer-events-none">
+                    <div
+                      className={`w-4 h-4 rounded-full bg-gradient-to-br ${persona.pinColor} shadow-[0_2px_4px_rgba(0,0,0,0.3)] border border-white/60 flex items-center justify-center`}
+                    >
+                      <div className="w-1 h-1 rounded-full bg-white/70"></div>
+                    </div>
+                    <div className="w-0.5 h-2 bg-black/20 -mt-0.5"></div>
+                  </div>
+
+                  {/* Header */}
+                  <div className="flex items-center justify-between gap-2 border-b border-black/[0.08] pb-2 mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1 rounded bg-black/[0.08] text-[#141413]">
+                        {getPersonaIcon(persona.id)}
+                      </span>
+                      <span className="text-[15px] font-mono font-bold text-[#141413]">
+                        {persona.title}
+                      </span>
+                    </div>
+
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#666] bg-black/[0.05] px-2 py-0.5 rounded">
+                      {persona.tagline}
+                    </span>
+                  </div>
+
+                  {/* Quote */}
+                  <div className="text-[14px] sm:text-[15px] font-mono font-bold text-[#141413] italic mb-2">
+                    "{persona.quote}"
+                  </div>
+
+                  {/* Description */}
+                  <p className="text-[13px] font-mono text-[#3f3e3a] leading-relaxed mb-4">
+                    {persona.description}
+                  </p>
+
+                  {/* Typical Prompt */}
+                  <div className="p-3 bg-white/80 rounded border border-black/[0.08] font-mono text-[12px] text-[#222]">
+                    <div className="text-[10px] font-bold text-[#777] uppercase tracking-wider mb-1">
+                      Typical Developer Prompt:
+                    </div>
+                    <div>"{persona.typicalTask}"</div>
+                  </div>
+
+                  {/* Footer tag */}
+                  <div className="mt-3 pt-2 border-t border-black/[0.06] flex items-center justify-between text-[10.5px] font-mono text-[#5c5b56]">
+                    <span>Role: {persona.role}</span>
+                    <span className="text-[9.5px] opacity-60 font-semibold uppercase">
+                      {isLeft ? 'LEFT PIN' : 'RIGHT PIN'}
+                    </span>
+                  </div>
+
+                  {/* Dog-ear fold */}
+                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-black/[0.07] pointer-events-none rounded-tl-sm"></div>
                 </div>
-                <div className="text-[14px] leading-snug">
-                  {persona.title}
-                </div>
-              </button>
+              </div>
             );
           })}
-        </div>
-
-        {/* Active Persona Deep Dive */}
-        <div className="mt-8 bg-[#f4f2ee] border border-[#e8e6e2] rounded-[10px] p-6 sm:p-9 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-6 space-y-6">
-            <div>
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#737373] block mb-2">
-                Core Need & Philosophy
-              </span>
-              <h3 className="text-[24px] sm:text-[28px] font-semibold text-[#111111] tracking-tight">
-                "{activePersona.quote}"
-              </h3>
-              <p className="text-[15px] text-[#737373] mt-3 leading-relaxed">
-                {activePersona.description}
-              </p>
-            </div>
-
-            <div className="pt-4 border-t border-[#e8e6e2]">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#737373] block mb-2">
-                Typical Sylor Task Prompt
-              </span>
-              <div className="p-3.5 bg-white rounded border border-[#e8e6e2] font-mono text-[12px] text-[#111111]">
-                "{activePersona.typicalTask}"
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:col-span-6 bg-[#faf9f7] p-6 rounded-[8px] border border-[#e8e6e2] space-y-5">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#111111] block pb-2 border-b border-[#e8e6e2]">
-              Key Value Drivers
-            </span>
-            <div className="space-y-3">
-              {activePersona.valueDrivers.map((driver, idx) => (
-                <div key={idx} className="flex items-start gap-2.5 text-[14px] text-[#111111]">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span className="leading-snug">{driver}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-4 border-t border-[#e8e6e2] text-[12px] font-mono text-[#737373]">
-              Adapted for speed, correctness, and developer autonomy.
-            </div>
-          </div>
         </div>
       </div>
     </section>
