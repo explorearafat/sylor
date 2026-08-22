@@ -1,0 +1,25 @@
+appId: com.sylor.app
+productName: Sylor
+copyright: Copyright © 2026 Sylor
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - resources/**
+win:
+  target:
+    - nsis
+  icon: resources/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
+  # Version-less, space-less name so the public download link is permanent across
+  # releases: github.com/<repo>/releases/latest/download/Sylor-Setup.exe
+  artifactName: ${productName}-Setup.exe

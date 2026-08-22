@@ -1,0 +1,1657 @@
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { DiffEditor } from '@monaco-editor/react'
+import {
+  useChatStore,
+  type ActivityStatus,
+  type AgentCardUI,
+  type ChatMessageUI,
+  type OutgoingAttachment,
+  type ToolCardUI
+} from '../store/useChatStore'
+import { useSessionStore } from '../store/useSessionStore'
+import { useAppStore } from '../store/useAppStore'
+import { SylorLogo } from './SylorLogo'
+import { Markdown } from './Markdown'
+import {
+  ModelSelector,
+  EffortSelector,
+  ModeSelector,
+  PlanFirstToggle,
+  WorkModeSelector
+} from './ModelSelector'
+import { monacoThemeFor } from '../lib/monaco-theme'
+import { lineDiffStats, estimateTokens, formatCount } from '../lib/diff-stats'
+import type {
+  AgentRole,
+  Attachment,
+  IntentAnalysis,
+  ToolDecision,
+  ToolProposal
+} from '@shared/types'
+
+/** Human-readable byte size for an attachment chip (e.g. "12.4 KB"). */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** Whether a file's bytes can usefully be inlined as text for the engine. */
+function isTextLike(mime: string, name: string): boolean {
+  if (mime.startsWith('text/')) return true
+  if (/^application\/(json|xml|javascript|typescript|x-sh|x-yaml|yaml|toml)$/.test(mime))
+    return true
+  // Fall back on the extension when the OS reports a vague/empty mime.
+  const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
+  return [
+    'txt',
+    'md',
+    'markdown',
+    'json',
+    'js',
+    'jsx',
+    'ts',
+    'tsx',
+    'mjs',
+    'cjs',
+    'css',
+    'html',
+    'htm',
+    'yml',
+    'yaml',
+    'py',
+    'sh',
+    'bash',
+    'xml',
+    'csv',
+    'toml',
+    'ini',
+    'cfg',
+    'conf',
+    'log',
+    'env'
+  ].includes(ext)
+}
+
+/** Read a browser File as base64 (without the `data:<mime>;base64,` prefix). */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      const comma = result.indexOf(',')
+      resolve(comma >= 0 ? result.slice(comma + 1) : result)
+    }
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+/** A file staged in the composer, already stored (pending, no message yet). */
+interface PendingAttachment {
+  attachment: Attachment
+  /** Data URL for an image thumbnail (images only). */
+  thumbnailUrl?: string
+  /** Decoded body for text-like files, inlined into the engine history. */
+  textContent?: string
+}
+
+/** Presentational attachment chip: image thumb or file pill, optional remove ×. */
+function AttachmentChip({
+  name,
+  mime,
+  size,
+  thumbnailUrl,
+  onRemove
+}: {
+  name: string
+  mime: string
+  size: number
+  thumbnailUrl?: string | null
+  onRemove?: () => void
+}) {
+  const isImage = mime.startsWith('image/')
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2 py-1.5">
+      {isImage && thumbnailUrl ? (
+        <img src={thumbnailUrl} alt={name} className="h-8 w-8 shrink-0 rounded object-cover" />
+      ) : (
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded bg-surface-2 text-muted">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M9 1.5H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.5L9 1.5Z"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinejoin="round"
+            />
+            <path d="M9 1.5V5.5h4" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+          </svg>
+        </div>
+      )}
+      <div className="min-w-0">
+        <div className="max-w-[140px] truncate text-[11px] font-medium text-text">{name}</div>
+        <div className="text-[10px] text-muted">{formatBytes(size)}</div>
+      </div>
+      {onRemove && (
+        <button
+          type="button"
+          aria-label={`Remove ${name}`}
+          onClick={onRemove}
+          className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-surface-2 text-muted transition-colors hover:bg-red-500/20 hover:text-red-400"
+        >
+          <svg width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+            <path
+              d="M2 2l6 6M8 2l-6 6"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** A persisted-message attachment chip; lazily reads an image's data URL. */
+function MessageAttachmentChip({ attachment }: { attachment: Attachment }) {
+  const isImage = attachment.mime.startsWith('image/')
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!isImage) return
+    let cancelled = false
+    void window.sylor.attachments.read(attachment.id).then((url) => {
+      if (!cancelled) setThumbnailUrl(url)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [attachment.id, isImage])
+  return (
+    <AttachmentChip
+      name={attachment.name}
+      mime={attachment.mime}
+      size={attachment.size}
+      thumbnailUrl={thumbnailUrl}
+    />
+  )
+}
+
+function Avatar({ role }: { role: ChatMessageUI['role'] }) {
+  if (role === 'assistant') {
+    return (
+      <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/12">
+        <SylorLogo size={18} showBubbles={false} />
+      </div>
+    )
+  }
+  return (
+    <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2 text-[11px] font-semibold text-muted">
+      You
+    </div>
+  )
+}
+
+/** Formats elapsed seconds for the live status line: `12s`, then `1m 03s`. */
+function formatElapsed(totalSeconds: number): string {
+  if (totalSeconds < 60) return `${totalSeconds}s`
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  return `${m}m ${s.toString().padStart(2, '0')}s`
+}
+
+/** Formats a rough token estimate: `840`, then `1.2k`. */
+function formatTokens(tokens: number): string {
+  return tokens < 1000 ? `${tokens}` : `${(tokens / 1000).toFixed(1)}k`
+}
+
+/**
+ * Claude-Code-style live status line, shown at the BOTTOM of the active turn for
+ * the entire run: a pulsing Sylor mark, the current activity verb (shimmering),
+ * the elapsed time, and a rough running token estimate. It stays mounted across
+ * every step — so the timer measures the true turn duration — and simply
+ * re-labels as the engine's status changes (Thinking → Planning → Applying →
+ * Continuing the build → …). This replaces the old split of a one-shot
+ * "Thinking…" plus a separate top chip that appeared to flicker on each step.
+ */
+function LiveActivity({ status, tokens }: { status: ActivityStatus | null; tokens: number }): ReactNode {
+  const [elapsed, setElapsed] = useState(0)
+  const startRef = useRef(Date.now())
+  useEffect(() => {
+    const id = setInterval(() => {
+      setElapsed(Math.round((Date.now() - startRef.current) / 1000))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  return (
+    <div className="mt-1.5 flex items-center gap-2 text-[12px] text-muted" aria-live="polite">
+      <span className="sylor-blink grid h-5 w-5 shrink-0 place-items-center rounded bg-primary/12">
+        <SylorLogo size={13} showBubbles={false} />
+      </span>
+      <span className="sylor-thinking font-medium">{status?.message ?? 'Thinking…'}</span>
+      <span aria-hidden className="text-muted/50">
+        ·
+      </span>
+      <span className="tabular-nums">{formatElapsed(elapsed)}</span>
+      {tokens > 0 && (
+        <>
+          <span aria-hidden className="text-muted/50">
+            ·
+          </span>
+          <span className="tabular-nums">~{formatTokens(tokens)} tokens</span>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** Maps a file extension to a Monaco language id for diff syntax highlighting. */
+function languageForPath(path: string): string {
+  const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
+  switch (ext) {
+    case 'ts':
+    case 'mts':
+    case 'cts':
+      return 'typescript'
+    case 'tsx':
+      return 'typescript'
+    case 'js':
+    case 'mjs':
+    case 'cjs':
+    case 'jsx':
+      return 'javascript'
+    case 'json':
+      return 'json'
+    case 'css':
+      return 'css'
+    case 'html':
+      return 'html'
+    case 'md':
+    case 'markdown':
+      return 'markdown'
+    case 'py':
+      return 'python'
+    case 'sh':
+    case 'bash':
+      return 'shell'
+    case 'yml':
+    case 'yaml':
+      return 'yaml'
+    default:
+      return 'plaintext'
+  }
+}
+
+/** Strips a run's leading `sylor-tool` fenced blocks that leaked into prose. */
+const TOOL_FENCE_RE = /```sylor-tool[\s\S]*?```/g
+
+/** Last path segment, for compact labels (the full path stays in a title attr). */
+function basename(path: string): string {
+  const norm = path.replace(/[\\/]+$/, '')
+  const i = Math.max(norm.lastIndexOf('/'), norm.lastIndexOf('\\'))
+  return i >= 0 ? norm.slice(i + 1) : norm
+}
+
+/**
+ * Compact, status-aware label for a tool card's one-line row (requirement C):
+ * "Edit App.tsx" while pending → "Edited App.tsx" once applied. Commands and MCP
+ * calls get a short verb + target so the thread reads at a glance without code.
+ */
+function toolLabel(card: ToolCardUI): string {
+  const { proposal } = card
+  const done = card.status === 'complete'
+  const running = card.status === 'running'
+  const tense = (verb: string, gerund: string, past: string): string =>
+    done ? past : running ? gerund : verb
+  if (proposal.kind === 'write_file') {
+    const base = basename(proposal.path)
+    return proposal.exists
+      ? `${tense('Edit', 'Editing', 'Edited')} ${base}`
+      : `${tense('Create', 'Creating', 'Created')} ${base}`
+  }
+  if (proposal.kind === 'mcp_call') {
+    return `${proposal.server}/${proposal.name}`
+  }
+  const head = proposal.command.trim().split(/\s+/).slice(0, 3).join(' ')
+  return `${tense('Run', 'Running', 'Ran')} ${head}`
+}
+
+/** Full, untruncated description of a proposal (used as a hover title). */
+function proposalFullTitle(proposal: ToolProposal): string {
+  if (proposal.kind === 'write_file') return proposal.path
+  if (proposal.kind === 'mcp_call') return `${proposal.server}/${proposal.name}`
+  return proposal.command
+}
+
+/** Header badge reflecting a card's lifecycle state. */
+function StatusBadge({ card }: { card: ToolCardUI }) {
+  if (card.status === 'complete') {
+    const failed =
+      card.decision === 'reject' ||
+      (card.result?.kind === 'write_file' && !card.result.ok) ||
+      (card.result?.kind === 'run_command' && card.result.exitCode !== 0) ||
+      (card.result?.kind === 'mcp_call' && !card.result.ok)
+    return (
+      <span
+        className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+          failed ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'
+        }`}
+      >
+        {card.decision === 'reject' ? 'Skipped' : failed ? 'Failed' : 'Applied'}
+      </span>
+    )
+  }
+  if (card.status === 'running') {
+    return (
+      <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+        {card.auto ? 'Auto · running' : 'Running'}
+      </span>
+    )
+  }
+  return (
+    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+      Needs approval
+    </span>
+  )
+}
+
+/** Renders the result footer (exit code / error / output tail). */
+function ToolResultFooter({ card }: { card: ToolCardUI }) {
+  const result = card.result
+  if (!result) return null
+  if (result.kind === 'write_file') {
+    if (result.ok) return null
+    return (
+      <div className="border-t border-border bg-red-500/10 px-3 py-1.5 text-[11px] text-red-300">
+        {result.error ?? 'Write failed.'}
+      </div>
+    )
+  }
+  if (result.kind === 'mcp_call') {
+    const mcpOut = result.output.trimEnd()
+    return (
+      <div className="border-t border-border bg-bg px-3 py-1.5">
+        <div className="mb-1 flex items-center gap-2 text-[10px] text-muted">
+          <span className={result.ok ? 'text-emerald-300' : 'text-red-300'}>
+            {result.ok ? 'ok' : 'error'}
+          </span>
+          {result.truncated && <span className="text-amber-300">output truncated</span>}
+        </div>
+        {!result.ok && result.error && (
+          <div className="mb-1 text-[11px] text-red-300">{result.error}</div>
+        )}
+        {mcpOut.length > 0 && (
+          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-text/80">
+            {mcpOut}
+          </pre>
+        )}
+      </div>
+    )
+  }
+  // run_command
+  const output = result.output.trimEnd()
+  return (
+    <div className="border-t border-border bg-bg px-3 py-1.5">
+      <div className="mb-1 flex items-center gap-2 text-[10px] text-muted">
+        <span>
+          exit code{' '}
+          <span className={result.exitCode === 0 ? 'text-emerald-300' : 'text-red-300'}>
+            {result.exitCode ?? 'killed'}
+          </span>
+        </span>
+        {result.truncated && <span className="text-amber-300">output truncated</span>}
+      </div>
+      {output.length > 0 && (
+        <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-text/80">
+          {output}
+        </pre>
+      )}
+    </div>
+  )
+}
+
+/**
+ * A tool op rendered as a compact, tappable activity line (requirement C): a
+ * single row — chevron, icon, "Edited App.tsx", +/− line stats, status badge —
+ * with the diff / command / output tucked behind a tap. Approval is NOT here;
+ * pending ops are approved from the permission bar above the composer
+ * (requirement D). This keeps code out of the conversation by default.
+ */
+function ToolCard({ card }: { card: ToolCardUI }) {
+  const { proposal } = card
+  const theme = useAppStore((s) => s.theme)
+  const [expanded, setExpanded] = useState(false)
+  const language = proposal.kind === 'write_file' ? languageForPath(proposal.path) : 'plaintext'
+  const icon = proposal.kind === 'write_file' ? '✎' : proposal.kind === 'mcp_call' ? '⚙' : '❯'
+  const stats =
+    proposal.kind === 'write_file' ? lineDiffStats(proposal.oldContent, proposal.newContent) : null
+
+  return (
+    <div className="my-2 overflow-hidden rounded-lg border border-border bg-surface">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        title={proposalFullTitle(proposal)}
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-surface-2"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          aria-hidden="true"
+          className={'shrink-0 text-muted transition-transform ' + (expanded ? 'rotate-90' : '')}
+        >
+          <path
+            d="M3.5 2l3 3-3 3"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span className="shrink-0 text-[11px] text-muted">{icon}</span>
+        <span className="truncate text-[12px] font-medium text-text">{toolLabel(card)}</span>
+        {stats && (stats.added > 0 || stats.removed > 0) && (
+          <span className="shrink-0 font-mono text-[10px]">
+            <span className="text-emerald-500">+{stats.added}</span>{' '}
+            <span className="text-red-400">−{stats.removed}</span>
+          </span>
+        )}
+        <span className="ml-auto shrink-0">
+          <StatusBadge card={card} />
+        </span>
+      </button>
+
+      {expanded &&
+        (proposal.kind === 'write_file' ? (
+          <div className="h-56 border-t border-border">
+            <DiffEditor
+              theme={monacoThemeFor(theme)}
+              language={language}
+              original={proposal.oldContent}
+              modified={proposal.newContent}
+              options={{
+                readOnly: true,
+                renderSideBySide: false,
+                fontFamily: 'JetBrains Mono Variable, monospace',
+                fontSize: 12,
+                lineHeight: 18,
+                minimap: { enabled: false },
+                automaticLayout: true,
+                scrollBeyondLastLine: false,
+                renderOverviewRuler: false,
+                scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 }
+              }}
+              loading={<div className="p-3 text-[11px] text-muted">Loading diff…</div>}
+            />
+          </div>
+        ) : proposal.kind === 'mcp_call' ? (
+          <div className="border-t border-border bg-bg px-3 py-2">
+            <div className="mb-1 font-mono text-[11px] text-muted">
+              {proposal.server}/{proposal.name}
+            </div>
+            <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] text-text/90">
+              {JSON.stringify(proposal.arguments, null, 2)}
+            </pre>
+          </div>
+        ) : (
+          <pre className="border-t border-border bg-bg px-3 py-2 font-mono text-[12px] text-text/90">
+            <span className="text-muted">$ </span>
+            {proposal.command}
+          </pre>
+        ))}
+
+      {expanded && <ToolResultFooter card={card} />}
+    </div>
+  )
+}
+
+/**
+ * A block in an assistant turn's interleaved stream: prose, a lead tool card, or
+ * a nested subagent card — ordered by the offset at which each was emitted.
+ */
+type Block =
+  | { kind: 'prose'; text: string }
+  | { kind: 'card'; card: ToolCardUI }
+  | { kind: 'agent'; agent: AgentCardUI }
+
+/**
+ * Interleave streamed `content` with anchored blocks (tool cards / agent cards)
+ * by the offset at which each arrived, so the thread reads think → act → think.
+ * Anchors without an offset (older persisted ops) fall to the end.
+ */
+function interleave(
+  content: string,
+  anchors: Array<{ offset: number | undefined; block: Exclude<Block, { kind: 'prose' }> }>
+): Block[] {
+  const ordered = [...anchors].sort(
+    (a, b) => (a.offset ?? Number.POSITIVE_INFINITY) - (b.offset ?? Number.POSITIVE_INFINITY)
+  )
+  const out: Block[] = []
+  let cursor = 0
+  for (const { offset, block } of ordered) {
+    const at = offset == null ? content.length : Math.min(offset, content.length)
+    if (at > cursor) {
+      out.push({ kind: 'prose', text: content.slice(cursor, at) })
+      cursor = at
+    }
+    out.push(block)
+  }
+  if (cursor < content.length) out.push({ kind: 'prose', text: content.slice(cursor) })
+  return out
+}
+
+/** Display metadata per subagent role (requirement B). */
+const ROLE_META: Record<AgentRole, { label: string; icon: string }> = {
+  lead: { label: 'Lead', icon: '◆' },
+  planner: { label: 'Planner', icon: '✐' },
+  builder: { label: 'Builder', icon: '⚒' },
+  reviewer: { label: 'Reviewer', icon: '✓' }
+}
+
+/**
+ * A subagent the lead delegated to (requirement B), rendered as a nested,
+ * left-ruled card: role + assigned task in the header, the subagent's own
+ * streamed prose and tool cards in the body (its report is the tail of that
+ * prose), and a Done/Failed badge once it hands back to the lead. This is the
+ * visible "agents communicating": lead → task in, subagent → work + report out.
+ */
+function AgentCard({ agent, tools }: { agent: AgentCardUI; tools: ToolCardUI[] }) {
+  const meta = ROLE_META[agent.role]
+  const running = agent.status === 'running'
+  const blocks = useMemo(
+    () =>
+      interleave(
+        agent.content,
+        tools.map((c) => ({ offset: c.contentOffset, block: { kind: 'card' as const, card: c } }))
+      ),
+    [agent.content, tools]
+  )
+
+  return (
+    <div className="my-3 overflow-hidden rounded-lg border border-border bg-surface/50">
+      <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
+        <span className="grid h-5 w-5 shrink-0 place-items-center rounded bg-primary/12 text-[11px] text-primary">
+          {meta.icon}
+        </span>
+        <span className="shrink-0 text-[12px] font-semibold text-text">{meta.label}</span>
+        <span className="min-w-0 flex-1 truncate text-[11px] text-muted" title={agent.task}>
+          {agent.task}
+        </span>
+        {running ? (
+          <span className="inline-flex shrink-0 items-center gap-1 text-[10px] text-primary">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+            working
+          </span>
+        ) : (
+          <span
+            className={
+              'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ' +
+              (agent.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300')
+            }
+          >
+            {agent.ok ? 'Done' : 'Failed'}
+          </span>
+        )}
+      </div>
+      <div className="border-l-2 border-primary/30 px-3 py-2">
+        {blocks.length > 0 ? (
+          blocks.map((block, i) =>
+            block.kind === 'card' ? (
+              <ToolCard key={block.card.id} card={block.card} />
+            ) : block.kind === 'prose' ? (
+              <ProseBlock
+                key={`prose-${i}`}
+                text={block.text}
+                showCaret={running && i === blocks.length - 1}
+              />
+            ) : null
+          )
+        ) : running ? (
+          <span className="sylor-thinking text-[12px] font-medium">Working…</span>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+interface MessageProps {
+  message: ChatMessageUI
+  /** Whether this is the active (last, streaming) assistant message. */
+  isActive: boolean
+  intent: IntentAnalysis | null
+  status: ActivityStatus | null
+  /** Lead (top-level) tool cards anchored beneath this message, in stream order. */
+  cards: ToolCardUI[]
+  /** Subagent cards anchored beneath this message (requirement B), in stream order. */
+  agents: AgentCardUI[]
+  /** Subagent tool cards keyed by agentId — rendered inside their agent card. */
+  agentTools: Map<string, ToolCardUI[]>
+  /** Attachments the user sent with this message (chips above the text). */
+  attachments: Attachment[]
+}
+
+/** A single icon action button in the message-actions row. */
+function ActionButton({
+  label,
+  active,
+  disabled,
+  onClick,
+  children
+}: {
+  label: string
+  active?: boolean
+  disabled?: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      aria-pressed={active}
+      onClick={onClick}
+      className={
+        'grid h-6 w-6 place-items-center rounded-md transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 ' +
+        (active ? 'text-primary' : 'text-muted hover:text-text')
+      }
+    >
+      {children}
+    </button>
+  )
+}
+
+/**
+ * Local-only actions under a finished assistant reply (Claude/ChatGPT-style):
+ * Copy to clipboard, Rewrite (regenerate), like/dislike feedback, and Report.
+ * Feedback and Report are markers persisted for reload only — nothing is sent.
+ */
+function MessageActions({ message }: { message: ChatMessageUI }) {
+  const running = useChatStore((s) => s.running)
+  const setFeedback = useChatStore((s) => s.setFeedback)
+  const toggleFlag = useChatStore((s) => s.toggleFlag)
+  const regenerate = useChatStore((s) => s.regenerate)
+  const [copied, setCopied] = useState(false)
+
+  const copy = (): void => {
+    void navigator.clipboard.writeText(message.content).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    })
+  }
+
+  return (
+    <div className="mt-1.5 flex items-center gap-0.5">
+      <ActionButton label={copied ? 'Copied' : 'Copy'} onClick={copy}>
+        {copied ? (
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M3 8.5l3 3 7-7"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        ) : (
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect
+              x="5"
+              y="5"
+              width="8.5"
+              height="8.5"
+              rx="1.5"
+              stroke="currentColor"
+              strokeWidth="1.3"
+            />
+            <path
+              d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"
+              stroke="currentColor"
+              strokeWidth="1.3"
+            />
+          </svg>
+        )}
+      </ActionButton>
+      <ActionButton label="Rewrite" disabled={running} onClick={() => regenerate(message.id)}>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M13 8a5 5 0 1 1-1.5-3.5M13 2.5V5h-2.5"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </ActionButton>
+      <ActionButton
+        label="Good response"
+        active={message.feedback === 'like'}
+        onClick={() => setFeedback(message.id, 'like')}
+      >
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 16 16"
+          fill={message.feedback === 'like' ? 'currentColor' : 'none'}
+          aria-hidden="true"
+        >
+          <path
+            d="M5 7v6.5H3.5A1 1 0 0 1 2.5 12.5V8a1 1 0 0 1 1-1H5zm0 0 2.5-5a1.5 1.5 0 0 1 1.5 1.5V6h3.3a1 1 0 0 1 1 1.2l-1 4.5a1.2 1.2 0 0 1-1.2 1H5"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </ActionButton>
+      <ActionButton
+        label="Bad response"
+        active={message.feedback === 'dislike'}
+        onClick={() => setFeedback(message.id, 'dislike')}
+      >
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 16 16"
+          fill={message.feedback === 'dislike' ? 'currentColor' : 'none'}
+          aria-hidden="true"
+          style={{ transform: 'rotate(180deg)' }}
+        >
+          <path
+            d="M5 7v6.5H3.5A1 1 0 0 1 2.5 12.5V8a1 1 0 0 1 1-1H5zm0 0 2.5-5a1.5 1.5 0 0 1 1.5 1.5V6h3.3a1 1 0 0 1 1 1.2l-1 4.5a1.2 1.2 0 0 1-1.2 1H5"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </ActionButton>
+      <ActionButton
+        label={message.flagged ? 'Reported' : 'Report'}
+        active={message.flagged}
+        onClick={() => toggleFlag(message.id)}
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3.5 2v12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          <path
+            d="M3.5 2.8h8.2l-1.6 2.7 1.6 2.7H3.5"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinejoin="round"
+            fill={message.flagged ? 'currentColor' : 'none'}
+          />
+        </svg>
+      </ActionButton>
+    </div>
+  )
+}
+
+/**
+ * One prose segment of an assistant turn (before/between/after tool cards).
+ * Applies the same sylor-tool fence backstop + trim as the whole-message path
+ * and renders nothing when empty (e.g. two cards emitted back-to-back). Shows
+ * the streaming caret when it's the tail of a still-streaming turn.
+ */
+const ProseBlock = memo(function ProseBlock({
+  text,
+  showCaret
+}: {
+  text: string
+  showCaret: boolean
+}) {
+  const content = useMemo(() => text.replace(TOOL_FENCE_RE, '').trim(), [text])
+  const caret = showCaret ? (
+    <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-primary/70 align-middle" />
+  ) : null
+  if (content.length === 0) return caret
+  return (
+    <>
+      <Markdown content={content} />
+      {caret}
+    </>
+  )
+})
+
+/**
+ * User prose clamped to three lines with a Show more/less toggle (requirement F).
+ * Overflow is measured after layout so the toggle only appears when the text is
+ * actually taller than the clamp.
+ */
+function ClampedUserText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const [overflowing, setOverflowing] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (el) setOverflowing(el.scrollHeight - el.clientHeight > 2)
+  }, [text, expanded])
+  return (
+    <div>
+      <div
+        ref={ref}
+        className={
+          'whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text ' +
+          (expanded ? '' : 'line-clamp-3')
+        }
+      >
+        {text}
+      </div>
+      {(overflowing || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-[11px] font-medium text-primary/80 transition-colors hover:text-primary"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** A user turn: right-aligned bubble with its attachments (requirement F). */
+function UserMessage({ message, attachments }: MessageProps) {
+  const displayContent = useMemo(
+    () => message.content.replace(TOOL_FENCE_RE, '').trimEnd(),
+    [message.content]
+  )
+  if (displayContent.length === 0 && attachments.length === 0) return null
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {attachments.map((a) => (
+            <MessageAttachmentChip key={a.id} attachment={a} />
+          ))}
+        </div>
+      )}
+      {displayContent.length > 0 && (
+        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-surface-2 px-3.5 py-2">
+          <ClampedUserText text={displayContent} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * An assistant turn: left-aligned with avatar, and a body that interleaves prose,
+ * lead tool cards, and nested subagent cards (requirement B) in stream order.
+ */
+function AssistantMessage({
+  message,
+  isActive,
+  status,
+  cards,
+  agents,
+  agentTools
+}: MessageProps) {
+  // Backstop: never show raw sylor-tool JSON if a fence leaked past the extractor.
+  const displayContent = useMemo(
+    () => message.content.replace(TOOL_FENCE_RE, '').trimEnd(),
+    [message.content]
+  )
+
+  // Interleave prose with the lead's tool cards AND the subagent cards anchored
+  // beneath this turn, in stream order (think → act → delegate → think). Cards
+  // without an offset fall to the end. Subagent tool cards live inside their
+  // agent card, not here.
+  const blocks = useMemo(() => {
+    const anchors = [
+      ...cards.map((c) => ({
+        offset: c.contentOffset,
+        block: { kind: 'card' as const, card: c }
+      })),
+      ...agents.map((a) => ({
+        offset: a.contentOffset,
+        block: { kind: 'agent' as const, agent: a }
+      }))
+    ]
+    return interleave(message.content, anchors)
+  }, [message.content, cards, agents])
+
+  // Rough running token estimate for the live status line (≈ chars ÷ 4): the
+  // lead's prose, every subagent's prose, and any file contents the model wrote —
+  // the visible "output so far". A renderer-side approximation (no provider usage
+  // plumbing, per the low-token constraint), so the UI prefixes it with ~.
+  const tokenEstimate = useMemo(() => {
+    let chars = message.content.length
+    for (const c of cards) {
+      if (c.proposal.kind === 'write_file') chars += c.proposal.newContent.length
+    }
+    for (const a of agents) chars += a.content.length
+    return Math.round(chars / 4)
+  }, [message.content, cards, agents])
+
+  return (
+    <div className="flex gap-3">
+      <Avatar role="assistant" />
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 text-[11px] font-medium text-muted">Sylor</div>
+
+        {message.error && (
+          <div className="mb-1.5 rounded border border-red-500/40 bg-red-500/10 px-2 py-1 text-[11px] text-red-300">
+            {message.error}
+          </div>
+        )}
+
+        {blocks.length > 0 && (
+          <div className="min-w-0">
+            {blocks.map((block, i) =>
+              block.kind === 'card' ? (
+                <ToolCard key={block.card.id} card={block.card} />
+              ) : block.kind === 'agent' ? (
+                <AgentCard
+                  key={block.agent.agentId}
+                  agent={block.agent}
+                  tools={agentTools.get(block.agent.agentId) ?? []}
+                />
+              ) : (
+                <ProseBlock
+                  key={`prose-${i}`}
+                  text={block.text}
+                  showCaret={message.pending === true && i === blocks.length - 1}
+                />
+              )
+            )}
+          </div>
+        )}
+
+        {isActive && message.pending && <LiveActivity status={status} tokens={tokenEstimate} />}
+
+        {!message.pending && (displayContent.length > 0 || message.error != null) && (
+          <MessageActions message={message} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Dispatches to the user/assistant layout (each keeps its own hook order). */
+function Message(props: MessageProps) {
+  return props.message.role === 'user' ? (
+    <UserMessage {...props} />
+  ) : (
+    <AssistantMessage {...props} />
+  )
+}
+
+/**
+ * Folder-first gate for Code mode (requirement A): before Sylor will read, edit,
+ * or run anything, the user must pick a working folder. Rendered in place of the
+ * composer input until one is chosen; the mode selectors stay visible below so
+ * the user can switch back to Cowork (which needs no folder).
+ */
+function FolderGate({ onChoose }: { onChoose: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onChoose}
+      className="flex w-full flex-col items-center gap-1 rounded-lg border border-dashed border-primary/50 bg-surface px-3 py-4 text-center transition-colors hover:bg-primary/5"
+    >
+      <span className="flex items-center gap-2 text-[13px] font-semibold text-primary">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path
+            d="M2.5 5.5a1 1 0 0 1 1-1h3.2l1.5 1.8h7.3a1 1 0 0 1 1 1v6.2a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V5.5Z"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinejoin="round"
+          />
+        </svg>
+        Choose a folder to work in
+      </span>
+      <span className="text-[11px] text-muted">
+        Code mode reads, edits, and runs commands inside a folder you pick.
+      </span>
+    </button>
+  )
+}
+
+/**
+ * Pending-approval bar shown directly ABOVE the composer (requirement D): every
+ * tool op still awaiting a decision — the lead's or a subagent's — is listed
+ * here with Reject / Approve, so approvals live at the input rather than being
+ * hunted down in the thread. With more than one waiting, Approve all / Reject
+ * all act on the batch. Routes through the same gate as the engine — nothing is
+ * auto-applied here; autonomous mode simply never leaves ops in this state.
+ */
+function PermissionBar({
+  awaiting,
+  onDecide
+}: {
+  awaiting: ToolCardUI[]
+  onDecide: (toolId: string, decision: ToolDecision) => void
+}) {
+  if (awaiting.length === 0) return null
+  return (
+    <div className="mb-2 overflow-hidden rounded-lg border border-amber-500/40 bg-amber-500/5">
+      <div className="flex items-center justify-between gap-2 border-b border-amber-500/20 px-3 py-1.5">
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-300">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+          {awaiting.length === 1 ? 'Approval needed' : `${awaiting.length} actions need approval`}
+        </span>
+        {awaiting.length > 1 && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => awaiting.forEach((c) => onDecide(c.id, 'reject'))}
+              className="rounded-md px-2 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-2 hover:text-text"
+            >
+              Reject all
+            </button>
+            <button
+              type="button"
+              onClick={() => awaiting.forEach((c) => onDecide(c.id, 'approve'))}
+              className="rounded-md bg-primary px-2 py-0.5 text-[11px] font-medium text-bg transition-opacity hover:opacity-90"
+            >
+              Approve all
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="max-h-40 overflow-y-auto">
+        {awaiting.map((card) => {
+          const role = card.agentRole ? ROLE_META[card.agentRole] : null
+          const icon =
+            card.proposal.kind === 'write_file'
+              ? '✎'
+              : card.proposal.kind === 'mcp_call'
+                ? '⚙'
+                : '❯'
+          return (
+            <div
+              key={card.id}
+              className="flex items-center gap-2 px-3 py-1.5 text-[12px] [&:not(:last-child)]:border-b [&:not(:last-child)]:border-amber-500/10"
+            >
+              <span className="shrink-0 text-[11px] text-muted">{icon}</span>
+              <span
+                className="min-w-0 flex-1 truncate font-medium text-text"
+                title={proposalFullTitle(card.proposal)}
+              >
+                {toolLabel(card)}
+              </span>
+              {role && (
+                <span
+                  className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                  title={`Requested by the ${role.label.toLowerCase()}`}
+                >
+                  {role.icon} {role.label}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => onDecide(card.id, 'reject')}
+                className="shrink-0 rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-muted transition-colors hover:border-red-500/50 hover:text-red-300"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={() => onDecide(card.id, 'approve')}
+                className="shrink-0 rounded-md bg-primary px-2 py-0.5 text-[11px] font-medium text-bg transition-opacity hover:opacity-90"
+              >
+                Approve
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function EmptyState() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+      <div className="mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/12">
+        <SylorLogo size={40} />
+      </div>
+      <div className="mb-1 text-[14px] font-semibold text-text">Ask Sylor about your project</div>
+      <p className="max-w-xs text-[12px] leading-relaxed text-muted">
+        Sylor can read your files, propose edits as reviewable diffs, and run commands — each gated
+        by your permission mode.
+      </p>
+    </div>
+  )
+}
+
+/** Theme toggle: sun in light, moon in dark. */
+function ThemeToggle() {
+  const theme = useAppStore((s) => s.theme)
+  const setTheme = useAppStore((s) => s.setTheme)
+  return (
+    <button
+      type="button"
+      aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+      title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+      onClick={() => void setTheme(theme === 'dark' ? 'light' : 'dark')}
+      className="grid h-7 w-7 place-items-center rounded-md text-muted transition-colors hover:bg-surface hover:text-text"
+    >
+      {theme === 'dark' ? (
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path
+            d="M16 11.5A6.5 6.5 0 0 1 8.5 4a6.5 6.5 0 1 0 7.5 7.5Z"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : (
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <circle cx="10" cy="10" r="3.5" stroke="currentColor" strokeWidth="1.4" />
+          <path
+            d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+      )}
+    </button>
+  )
+}
+
+/** Slim chat header: rail toggle, model selector, theme + preview controls. */
+function ChatHeader({ onNewChat }: { onNewChat: () => void }) {
+  const toggleRail = useAppStore((s) => s.toggleRail)
+  const previewOpen = useAppStore((s) => s.previewOpen)
+  const openPreview = useAppStore((s) => s.openPreview)
+  const closePreview = useAppStore((s) => s.closePreview)
+
+  return (
+    <div className="flex items-center justify-between border-b border-border px-3 py-2">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Toggle sidebar"
+          title="Toggle sidebar"
+          onClick={toggleRail}
+          className="grid h-7 w-7 place-items-center rounded-md text-muted transition-colors hover:bg-surface hover:text-text"
+        >
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <rect
+              x="2.5"
+              y="3.5"
+              width="15"
+              height="13"
+              rx="2"
+              stroke="currentColor"
+              strokeWidth="1.4"
+            />
+            <path d="M7.5 3.5v13" stroke="currentColor" strokeWidth="1.4" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={onNewChat}
+          className="rounded-md px-2 py-1 text-[11px] text-muted transition-colors hover:bg-surface hover:text-text"
+        >
+          New chat
+        </button>
+        <ThemeToggle />
+        <button
+          type="button"
+          aria-label="Toggle preview"
+          title="Live preview"
+          onClick={() => (previewOpen ? closePreview() : openPreview())}
+          className={
+            'grid h-7 w-7 place-items-center rounded-md transition-colors hover:bg-surface hover:text-text ' +
+            (previewOpen ? 'text-primary' : 'text-muted')
+          }
+        >
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <rect
+              x="2.5"
+              y="4.5"
+              width="15"
+              height="11"
+              rx="2"
+              stroke="currentColor"
+              strokeWidth="1.4"
+            />
+            <path d="M8 8.5l3 1.5-3 1.5v-3z" fill="currentColor" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export function ChatPanel() {
+  const messages = useChatStore((s) => s.messages)
+  const tools = useChatStore((s) => s.tools)
+  const agents = useChatStore((s) => s.agents)
+  const attachments = useChatStore((s) => s.attachments)
+  const running = useChatStore((s) => s.running)
+  const intent = useChatStore((s) => s.intent)
+  const status = useChatStore((s) => s.status)
+  const send = useChatStore((s) => s.send)
+  const sessionId = useChatStore((s) => s.sessionId)
+  const decideTool = useChatStore((s) => s.decideTool)
+  const cancel = useChatStore((s) => s.cancel)
+  const newSession = useSessionStore((s) => s.create)
+  const workMode = useAppStore((s) => s.workMode)
+  const workspaceChosen = useAppStore((s) => s.workspaceChosen)
+  const workspaceRoot = useAppStore((s) => s.workspaceRoot)
+  const selectWorkspace = useAppStore((s) => s.selectWorkspace)
+
+  const [input, setInput] = useState('')
+  // Files staged in the composer (already stored on disk as pending rows).
+  const [pending, setPending] = useState<PendingAttachment[]>([])
+  const [dragging, setDragging] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // The last message is the "active" one whose intent/status chips we surface.
+  const lastId = messages.length > 0 ? messages[messages.length - 1].id : null
+
+  // Folder-first gate (requirement A): Code mode is inert until a folder is
+  // picked, so the composer is replaced by a chooser and submit is blocked.
+  const needsFolder = workMode === 'code' && !workspaceChosen
+
+  // Split tool cards for rendering: the lead's own ops anchor directly beneath
+  // their assistant message, while a subagent's ops (agentId set) render inside
+  // that agent's nested card (requirement B). Group each accordingly.
+  const leadCardsByMessage = useMemo(() => {
+    const map = new Map<string, ToolCardUI[]>()
+    for (const card of tools) {
+      if (card.agentId != null) continue
+      const list = map.get(card.afterMessageId)
+      if (list) list.push(card)
+      else map.set(card.afterMessageId, [card])
+    }
+    return map
+  }, [tools])
+
+  // Subagent tool cards keyed by the agent that ran them (rendered in its card).
+  const toolsByAgent = useMemo(() => {
+    const map = new Map<string, ToolCardUI[]>()
+    for (const card of tools) {
+      if (card.agentId == null) continue
+      const list = map.get(card.agentId)
+      if (list) list.push(card)
+      else map.set(card.agentId, [card])
+    }
+    return map
+  }, [tools])
+
+  // Subagent cards grouped by the assistant message they were spawned beneath.
+  const agentsByMessage = useMemo(() => {
+    const map = new Map<string, AgentCardUI[]>()
+    for (const agent of agents) {
+      const list = map.get(agent.afterMessageId)
+      if (list) list.push(agent)
+      else map.set(agent.afterMessageId, [agent])
+    }
+    return map
+  }, [agents])
+
+  // Every op still awaiting a decision — lead or subagent — surfaced together in
+  // the permission bar above the composer (requirement D).
+  const awaiting = useMemo(() => tools.filter((t) => t.status === 'awaiting'), [tools])
+
+  // Group persisted attachments by the user message they were sent with.
+  const attachmentsByMessage = useMemo(() => {
+    const map = new Map<string, Attachment[]>()
+    for (const a of attachments) {
+      if (a.messageId == null) continue
+      const list = map.get(a.messageId)
+      if (list) list.push(a)
+      else map.set(a.messageId, [a])
+    }
+    return map
+  }, [attachments])
+
+  // Real context diff: sum added/removed lines across every write_file this
+  // conversation proposed (old vs new contents). Reflects actual edits, not a
+  // guess. `edited` is how many distinct files were touched — gates the Commit
+  // button so it's only offered when there's something concrete to commit.
+  const { added, removed, edited } = useMemo(() => {
+    let added = 0
+    let removed = 0
+    const files = new Set<string>()
+    for (const card of tools) {
+      if (card.proposal.kind !== 'write_file') continue
+      // Only count edits that were actually applied (skip rejected/failed ones).
+      const applied =
+        card.decision !== 'reject' && !(card.result?.kind === 'write_file' && !card.result.ok)
+      if (!applied) continue
+      const stat = lineDiffStats(card.proposal.oldContent, card.proposal.newContent)
+      added += stat.added
+      removed += stat.removed
+      files.add(card.proposal.path)
+    }
+    return { added, removed, edited: files.size }
+  }, [tools])
+
+  // Rough token estimate (~) for the whole conversation plus the current draft.
+  // Labeled with a tilde in the UI so it's never mistaken for an exact count.
+  const tokenEstimate = useMemo(() => {
+    let chars = input.length
+    for (const m of messages) chars += m.content.length
+    return estimateTokens('x'.repeat(chars))
+  }, [messages, input])
+
+  // Auto-scroll to the newest content as it streams in (messages or tool cards).
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages, tools])
+
+  // Auto-grow the textarea up to its max height. Reset to one line-height first
+  // so the caret sits correctly when the field is empty (a bare `auto` collapses
+  // to 0 and leaves the caret half-clipped at the top of the box).
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 24), 128)}px`
+  }, [input])
+
+  // Store each dropped/selected file as a pending attachment and stage it. Text
+  // files also carry their decoded body for inlining into the engine history.
+  const stageFiles = async (files: File[]): Promise<void> => {
+    const sid = useChatStore.getState().sessionId
+    if (!sid || files.length === 0) return
+    for (const file of files) {
+      try {
+        const data = await fileToBase64(file)
+        const mime = file.type || 'application/octet-stream'
+        const attachment = await window.sylor.attachments.add({
+          sessionId: sid,
+          name: file.name,
+          mime,
+          data
+        })
+        const staged: PendingAttachment = { attachment }
+        if (mime.startsWith('image/')) {
+          staged.thumbnailUrl = `data:${mime};base64,${data}`
+        } else if (isTextLike(mime, file.name)) {
+          try {
+            staged.textContent = await file.text()
+          } catch {
+            // Unreadable as text: fall back to a metadata-only note.
+          }
+        }
+        setPending((prev) => [...prev, staged])
+      } catch (err) {
+        console.error('[sylor] failed to stage attachment:', err)
+      }
+    }
+  }
+
+  const removePending = (id: string): void => {
+    setPending((prev) => prev.filter((p) => p.attachment.id !== id))
+    void window.sylor.attachments.remove(id)
+  }
+
+  const onFilesPicked = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const files = event.target.files ? Array.from(event.target.files) : []
+    void stageFiles(files)
+    // Reset so picking the same file again re-fires change.
+    event.target.value = ''
+  }
+
+  const onDrop = (event: React.DragEvent): void => {
+    event.preventDefault()
+    setDragging(false)
+    const files = event.dataTransfer.files ? Array.from(event.dataTransfer.files) : []
+    void stageFiles(files)
+  }
+
+  const submit = (): void => {
+    const text = input.trim()
+    if ((!text && pending.length === 0) || running || needsFolder) return
+    const outgoing: OutgoingAttachment[] = pending.map((p) => ({
+      attachment: p.attachment,
+      ...(p.textContent != null ? { textContent: p.textContent } : {})
+    }))
+    send(text, outgoing)
+    // Title a still-unnamed session from its first prompt (fire-and-forget;
+    // no-ops once the session already has a real title). See useSessionStore.
+    void useSessionStore.getState().autoName(text)
+    setInput('')
+    setPending([])
+  }
+
+  // Commit the session's edits. Routes through the normal permission-gated
+  // workflow (the engine proposes `git add`/`git commit` as a run_command the
+  // user approves) — no permission bypass here; that lands with the power mode.
+  const commitChanges = (): void => {
+    if (running || edited === 0) return
+    send(
+      'Stage all current changes and create a single git commit summarizing this ' +
+        "session's edits. Run `git add -A` then `git commit -m` with a concise, " +
+        'descriptive message. If this directory is not a git repository, tell me instead ' +
+        'of committing.'
+    )
+  }
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      submit()
+    }
+  }
+
+  const canSend = (input.trim().length > 0 || pending.length > 0) && !needsFolder
+  const canAttach = sessionId != null
+
+  return (
+    <div className="flex h-full flex-col bg-bg">
+      <ChatHeader onNewChat={() => void newSession()} />
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        {messages.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <div className="space-y-5 px-4 py-4">
+            {messages.map((message) => (
+              <Message
+                key={message.id}
+                message={message}
+                isActive={message.id === lastId && message.role === 'assistant'}
+                intent={intent}
+                status={status}
+                cards={leadCardsByMessage.get(message.id) ?? []}
+                agents={agentsByMessage.get(message.id) ?? []}
+                agentTools={toolsByAgent}
+                attachments={attachmentsByMessage.get(message.id) ?? []}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div
+        className="border-t border-border p-3"
+        onDragOver={(e) => {
+          if (!canAttach) return
+          e.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={canAttach ? onDrop : undefined}
+      >
+        {/* Pending approvals sit directly above the composer (requirement D). */}
+        <PermissionBar awaiting={awaiting} onDecide={decideTool} />
+        {pending.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {pending.map((p) => (
+              <AttachmentChip
+                key={p.attachment.id}
+                name={p.attachment.name}
+                mime={p.attachment.mime}
+                size={p.attachment.size}
+                thumbnailUrl={p.thumbnailUrl ?? null}
+                onRemove={() => removePending(p.attachment.id)}
+              />
+            ))}
+          </div>
+        )}
+        {needsFolder ? (
+          <FolderGate onChoose={() => void selectWorkspace()} />
+        ) : (
+          <div
+            className={
+              'flex items-end gap-2 rounded-lg border bg-surface px-3 py-2 focus-within:border-primary/50 ' +
+              (dragging ? 'border-primary' : 'border-border')
+            }
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={onFilesPicked}
+              className="hidden"
+            />
+            <button
+              type="button"
+              aria-label="Attach files"
+              title={canAttach ? 'Attach files' : 'Start a chat to attach files'}
+              disabled={!canAttach}
+              onClick={() => fileInputRef.current?.click()}
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path
+                  d="M14 6.5l-6 6a2 2 0 0 1-3-3l6.5-6.5a3 3 0 0 1 4.5 4.5L9 14"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder={
+                dragging
+                  ? 'Drop files to attach…'
+                  : workMode === 'cowork'
+                    ? 'Ask Sylor anything…'
+                    : 'Ask Sylor to explain, edit, or run something…'
+              }
+              className="block max-h-32 min-h-6 flex-1 resize-none bg-transparent py-0.5 text-[13px] leading-6 text-text placeholder:text-muted focus:outline-none"
+            />
+            {running ? (
+              <button
+                type="button"
+                onClick={cancel}
+                aria-label="Stop"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2 text-text transition-colors hover:bg-border"
+              >
+                <span className="h-2.5 w-2.5 rounded-[2px] bg-current" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={submit}
+                disabled={!canSend}
+                aria-label="Send"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path
+                    d="M2 8h11M9 4l4 4-4 4"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <WorkModeSelector />
+            {/* Folder chip (requirement A): which folder Code mode is scoped to. */}
+            {workMode === 'code' && workspaceChosen && workspaceRoot && (
+              <button
+                type="button"
+                onClick={() => void selectWorkspace()}
+                title={`Working in ${workspaceRoot} · click to change folder`}
+                className="flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] text-muted transition-colors hover:border-primary/60 hover:text-text"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path
+                    d="M2 4.5a1 1 0 0 1 1-1h2.5l1.2 1.4h5.3a1 1 0 0 1 1 1v5.1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4.5Z"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span className="max-w-[120px] truncate font-medium">
+                  {basename(workspaceRoot)}
+                </span>
+              </button>
+            )}
+            <ModelSelector openUp />
+            <EffortSelector openUp />
+            {/* Permission mode + plan-first only apply to Code mode (edits/commands). */}
+            {workMode === 'code' && (
+              <>
+                <ModeSelector openUp />
+                <PlanFirstToggle />
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Real context diff from applied write_file edits. */}
+            {(added > 0 || removed > 0) && (
+              <span
+                className="flex items-center gap-1 font-mono text-[11px]"
+                title={`${added} lines added, ${removed} removed across ${edited} file${edited === 1 ? '' : 's'}`}
+              >
+                <span className="text-emerald-500">+{formatCount(added)}</span>
+                <span className="text-red-400">-{formatCount(removed)}</span>
+              </span>
+            )}
+            {/* Rough token estimate for the conversation + draft. */}
+            <span
+              className="text-[11px] text-muted"
+              title="Approximate token count for this conversation (estimate)"
+            >
+              ~{formatCount(tokenEstimate)} tokens
+            </span>
+            {/* Commit the session's edits via the permission-gated workflow. */}
+            <button
+              type="button"
+              onClick={commitChanges}
+              disabled={running || edited === 0}
+              title={
+                edited === 0
+                  ? 'No edits to commit yet'
+                  : `Commit ${edited} changed file${edited === 1 ? '' : 's'}`
+              }
+              className="flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium text-text transition-colors hover:border-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.4" />
+                <path
+                  d="M8 1.5v4M8 10.5v4"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+              </svg>
+              Commit
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

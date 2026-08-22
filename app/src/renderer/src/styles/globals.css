@@ -1,0 +1,355 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
+/*
+ * CSS-first theme (Tailwind v4). Each token below becomes a utility, e.g.
+ * bg-surface. The @theme block is the DEFAULT (Claude's warm light palette);
+ * the dark palette re-declares the same --color-* variables under
+ * [data-theme='dark'], which useAppStore sets on <html>. Because every utility
+ * compiles to var(--color-*), flipping the attribute recolors the whole app
+ * without touching a single component.
+ */
+@theme {
+  --color-bg: #faf9f5;
+  --color-surface: #ffffff;
+  --color-surface-2: #efeee6;
+  --color-border: #e3e1d8;
+  --color-primary: #d97757;
+  --color-accent: #d97757;
+  --color-text: #2b2a27;
+  --color-muted: #73716a;
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}
+
+/* Dark theme: override the color tokens; typography is shared. A warm, neutral
+ * charcoal palette (not cool blue-black) so it reads as the same brand as the
+ * light theme — the terracotta primary is brightened just enough to carry on a
+ * dark ground. */
+[data-theme='dark'] {
+  --color-bg: #1a1917;
+  --color-surface: #232220;
+  --color-surface-2: #2d2b27;
+  --color-border: #38352f;
+  --color-primary: #e0855f;
+  --color-accent: #e0855f;
+  --color-text: #ece9e3;
+  --color-muted: #a8a096;
+}
+
+/*
+ * Syntax highlighting tokens for rehype-highlight (highlight.js emits `.hljs-*`
+ * class names). Rather than vendor a full theme file — which would need a raw CSS
+ * import that Tailwind v4's `@import 'tailwindcss'` scoping fights — we define a
+ * compact, theme-aware palette here. `--hl-bg` backs the code-block container
+ * (referenced from Markdown.tsx); the rest color individual tokens. Light values
+ * live on :root; the dark block below overrides them. Fully offline, no fetch.
+ */
+:root {
+  --hl-bg: #f6f5f0;
+  --hl-text: #2b2a27;
+  --hl-comment: #97948c;
+  --hl-keyword: #a626a4;
+  --hl-string: #50a14f;
+  --hl-number: #b76b01;
+  --hl-function: #4078f2;
+  --hl-title: #c18401;
+  --hl-attr: #986801;
+  --hl-type: #c18401;
+  --hl-tag: #e45649;
+  --hl-literal: #0184bc;
+  --hl-deletion: #ffeef0;
+  --hl-addition: #e6ffed;
+}
+[data-theme='dark'] {
+  --hl-bg: #0b0f16;
+  --hl-text: #c9d1d9;
+  --hl-comment: #6a737d;
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-number: #79c0ff;
+  --hl-function: #d2a8ff;
+  --hl-title: #d2a8ff;
+  --hl-attr: #79c0ff;
+  --hl-type: #ffa657;
+  --hl-tag: #7ee787;
+  --hl-literal: #79c0ff;
+  --hl-deletion: #3c1618;
+  --hl-addition: #12261e;
+}
+
+.hljs {
+  color: var(--hl-text);
+  background: transparent;
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-doctag,
+.hljs-formula {
+  color: var(--hl-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-meta .hljs-string {
+  color: var(--hl-string);
+}
+.hljs-number,
+.hljs-literal {
+  color: var(--hl-literal);
+}
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--hl-function);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property {
+  color: var(--hl-attr);
+}
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-built_in,
+.hljs-builtin-name {
+  color: var(--hl-type);
+}
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: var(--hl-tag);
+}
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-meta {
+  color: var(--hl-number);
+}
+.hljs-deletion {
+  color: var(--hl-text);
+  background: var(--hl-deletion);
+}
+.hljs-addition {
+  color: var(--hl-text);
+  background: var(--hl-addition);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+body {
+  font-family: var(--font-sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Slim, unobtrusive scrollbars that track the active theme's border color. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+  background-clip: content-box;
+}
+
+/*
+ * Splash / opening animation. Shown on every launch by <SplashScreen>. The
+ * octopus outline strokes itself in (stroke-dashoffset), its fill fades up, the
+ * bubbles rise, and the wordmark fades in — then the whole overlay fades out to
+ * reveal the app. Timings are staged so the sequence reads as one motion.
+ */
+@keyframes sylor-draw {
+  from {
+    stroke-dashoffset: 300;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes sylor-fill-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes sylor-pop {
+  0% {
+    transform: scale(0.82);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes sylor-bubble-rise {
+  0% {
+    transform: translateY(6px) scale(0.6);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-10px) scale(1);
+    opacity: 0;
+  }
+}
+@keyframes sylor-word-in {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes sylor-splash-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.sylor-splash {
+  animation: sylor-splash-out 0.4s ease-in forwards;
+  animation-delay: 1.45s;
+}
+.sylor-splash__mark {
+  animation: sylor-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.sylor-splash__outline {
+  stroke-dasharray: 300;
+  animation: sylor-draw 1s ease-out both;
+}
+.sylor-splash__body {
+  animation: sylor-fill-in 0.5s ease-out both;
+  animation-delay: 0.7s;
+}
+.sylor-splash__face {
+  animation: sylor-fill-in 0.4s ease-out both;
+  animation-delay: 0.95s;
+}
+.sylor-splash__bubble {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sylor-bubble-rise 1.4s ease-in-out both;
+}
+.sylor-splash__word {
+  animation: sylor-word-in 0.5s ease-out both;
+  animation-delay: 0.85s;
+}
+
+/*
+ * "Thinking…" shimmer shown before the assistant streams its first token. A
+ * soft highlight sweeps left-to-right across the glyphs — the restrained motion
+ * Claude uses — by animating the position of a gradient clipped to the text.
+ * Reduced-motion falls back to a static muted label (below).
+ */
+@keyframes sylor-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.sylor-thinking {
+  background: linear-gradient(
+    100deg,
+    var(--color-muted) 0%,
+    var(--color-muted) 35%,
+    var(--color-text) 50%,
+    var(--color-muted) 65%,
+    var(--color-muted) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: sylor-shimmer 1.6s linear infinite;
+}
+
+/*
+ * Soft "heartbeat" for the Sylor mark in the live status line — a gentle opacity
+ * pulse (never a hard on/off) so the logo reads as alive while a run is in
+ * flight, matching the shimmering verb beside it. Reduced-motion holds it steady.
+ */
+@keyframes sylor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.sylor-blink {
+  animation: sylor-blink 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sylor-splash,
+  .sylor-splash__mark,
+  .sylor-splash__outline,
+  .sylor-splash__body,
+  .sylor-splash__face,
+  .sylor-splash__bubble,
+  .sylor-splash__word {
+    animation-duration: 0.01ms;
+    animation-delay: 0s;
+  }
+  .sylor-splash {
+    animation-delay: 0.8s;
+  }
+  .sylor-thinking {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: var(--color-muted);
+    color: var(--color-muted);
+  }
+  .sylor-blink {
+    animation: none;
+    opacity: 1;
+  }
+}

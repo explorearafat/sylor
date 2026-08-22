@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "test-ui",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vitest", "--ui"],
+      "port": 51204
+    },
+    {
+      "name": "preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--config", "vite.preview.config.ts"],
+      "port": 5199
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "website", "--port", "5056", "--strictPort"],
+      "port": 5056
+    }
+  ]
+}
