@@ -681,33 +681,50 @@ export const TRUST_SIGNALS: TrustSignal[] = [
   }
 ];
 
+// Single source of truth for the public desktop release. The Windows installer
+// is published on GitHub Releases under a version-less asset name, so this
+// "latest" link keeps working across every future release without a site edit
+// (see electron-builder artifactName: ${productName}-Setup.exe).
+export const RELEASE = {
+  version: '0.1.0',
+  repoUrl: 'https://github.com/explorearafat/sylor',
+  releasesUrl: 'https://github.com/explorearafat/sylor/releases/latest',
+  windowsUrl: 'https://github.com/explorearafat/sylor/releases/latest/download/Sylor-Setup.exe'
+};
+
 export const INSTALL_PLATFORMS = [
   {
     id: 'windows',
     name: 'Windows',
-    osTag: 'Windows 10 / 11 (x64, ARM64)',
-    primaryPackage: 'Sylor-Setup-1.0.4.exe',
-    fileSize: '74.2 MB',
-    cliCommand: 'winget install Sylor.Sylor',
-    recommendedFor: 'Standard desktop setup with auto-updates'
+    osTag: 'Windows 10 & 11 (64-bit)',
+    primaryPackage: 'Sylor-Setup.exe',
+    fileSize: '118 MB',
+    downloadUrl: RELEASE.windowsUrl,
+    cliCommand: '',
+    available: true,
+    recommendedFor: 'Standard desktop install. Self-signed — SmartScreen may warn on first run.'
   },
   {
     id: 'macos',
     name: 'macOS',
     osTag: 'macOS 12.0+ (Apple Silicon & Intel)',
-    primaryPackage: 'Sylor-1.0.4-universal.dmg',
-    fileSize: '68.5 MB',
-    cliCommand: 'brew install --cask sylor',
-    recommendedFor: 'Universal binary signed with Apple Notarization'
+    primaryPackage: 'Coming soon',
+    fileSize: '—',
+    downloadUrl: '',
+    cliCommand: '',
+    available: false,
+    recommendedFor: 'A signed universal build is on the way.'
   },
   {
     id: 'linux',
     name: 'Linux',
     osTag: 'Ubuntu, Debian, Fedora, Arch',
-    primaryPackage: 'sylor_1.0.4_amd64.deb',
-    fileSize: '62.1 MB',
-    cliCommand: 'curl -fsSL https://sylor.dev/install.sh | bash',
-    recommendedFor: 'Native packages (.deb, .rpm, .AppImage)'
+    primaryPackage: 'Coming soon',
+    fileSize: '—',
+    downloadUrl: '',
+    cliCommand: '',
+    available: false,
+    recommendedFor: 'AppImage & .deb packages are on the way.'
   }
 ];
 

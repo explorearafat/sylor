@@ -1,12 +1,12 @@
 import React from 'react';
-import { ExternalLink, BookOpen, Github, Layers } from 'lucide-react';
+import { ExternalLink, BookOpen, Github, Layers, Download } from 'lucide-react';
 import { SylorLogo } from './SylorLogo';
 
 interface FinalInstallSectionProps {
   onOpenDownloadModal?: () => void;
 }
 
-export const FinalInstallSection: React.FC<FinalInstallSectionProps> = () => {
+export const FinalInstallSection: React.FC<FinalInstallSectionProps> = ({ onOpenDownloadModal }) => {
   return (
     <section
       id="install"
@@ -36,11 +36,19 @@ export const FinalInstallSection: React.FC<FinalInstallSectionProps> = () => {
 
           
           <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button
+              onClick={onOpenDownloadModal}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-4 text-[14px] font-mono font-bold uppercase tracking-wider text-[#faf9f7] bg-[#111111] rounded-[6px] hover:bg-[#2c2b29] transition-all shadow-[0_4px_16px_rgba(0,0,0,0.12)] focus:outline-none"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download for Windows</span>
+            </button>
+
             <a
               href="https://trysylor.vercel.app"
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-4 text-[14px] font-mono font-bold uppercase tracking-wider text-[#faf9f7] bg-[#111111] rounded-[6px] hover:bg-[#2c2b29] transition-all shadow-[0_4px_16px_rgba(0,0,0,0.12)] focus:outline-none"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 text-[14px] font-mono font-bold uppercase tracking-wider text-[#555] hover:text-[#111111] bg-white hover:bg-[#eae7df] border border-[#e4e1d8] rounded-[6px] transition-colors focus:outline-none"
             >
               <span>Test Sylor</span>
               <ExternalLink className="w-4 h-4" />
@@ -48,7 +56,7 @@ export const FinalInstallSection: React.FC<FinalInstallSectionProps> = () => {
           </div>
 
           <div className="text-[12px] font-mono text-[#737373]">
-            Available for Windows, macOS and Linux. Free during preview.
+            Free for Windows 10 &amp; 11 · macOS &amp; Linux coming soon.
           </div>
 
           

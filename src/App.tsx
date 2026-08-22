@@ -129,7 +129,7 @@ export default function App() {
 
         
         <GeometricReveal durationMs={600} distancePx={20}>
-          <FinalInstallSection />
+          <FinalInstallSection onOpenDownloadModal={openDownloadModal} />
         </GeometricReveal>
 
         

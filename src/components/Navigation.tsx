@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ExternalLink } from 'lucide-react';
+import { Search, ExternalLink, Download } from 'lucide-react';
 import { SylorLogo } from './SylorLogo';
 
 interface NavigationProps {
@@ -9,6 +9,7 @@ interface NavigationProps {
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
+  onOpenDownloadModal,
   onOpenCommandPalette,
 }) => {
   const [scrolled, setScrolled] = useState(false);
@@ -158,11 +159,21 @@ export const Navigation: React.FC<NavigationProps> = ({
             href="https://trysylor.vercel.app"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-[#faf9f7] bg-[#141413] hover:bg-[#2b2a28] rounded-[5px] transition-all shadow-xs"
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-[#555] hover:text-[#111111] bg-[#faf9f7] hover:bg-[#f3f1ed] border border-[#e4e1d8] rounded-[5px] transition-all"
           >
             <span>Test Sylor</span>
             <ExternalLink className="w-3 h-3" />
           </a>
+
+          {onOpenDownloadModal && (
+            <button
+              onClick={onOpenDownloadModal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-[#faf9f7] bg-[#141413] hover:bg-[#2b2a28] rounded-[5px] transition-all shadow-xs"
+            >
+              <Download className="w-3 h-3" />
+              <span>Download</span>
+            </button>
+          )}
 
           {onOpenCommandPalette && (
             <button

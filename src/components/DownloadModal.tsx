@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, Download, ExternalLink, Terminal, Check, Copy, Monitor, Apple, Cpu, ShieldCheck } from 'lucide-react';
-import { INSTALL_PLATFORMS } from '../data';
+import { X, Download, ExternalLink, Monitor, Apple, Cpu, ShieldCheck } from 'lucide-react';
+import { INSTALL_PLATFORMS, RELEASE } from '../data';
 import { SylorLogo } from './SylorLogo';
 
 interface DownloadModalProps {
@@ -12,28 +12,13 @@ interface DownloadModalProps {
 export const DownloadModal: React.FC<DownloadModalProps> = ({
   isOpen,
   onClose,
-  initialPlatform = 'macos'
+  initialPlatform = 'windows'
 }) => {
   const [selectedPlatform, setSelectedPlatform] = useState<'windows' | 'macos' | 'linux'>(initialPlatform);
-  const [copied, setCopied] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
 
   if (!isOpen) return null;
 
   const currentPlatformData = INSTALL_PLATFORMS.find((p) => p.id === selectedPlatform) || INSTALL_PLATFORMS[0];
-
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleDownloadTrigger = () => {
-    setIsDownloading(true);
-    setTimeout(() => {
-      setIsDownloading(false);
-    }, 2500);
-  };
 
   return (
     <div
@@ -55,7 +40,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
               Install Sylor
             </div>
             <span className="text-[10px] font-mono uppercase tracking-wider text-[#737373] bg-[#e8e6e2] px-2 py-0.5 rounded">
-              v1.0.4 Release
+              v{RELEASE.version} Release
             </span>
           </div>
 
@@ -152,59 +137,68 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded shrink-0">
-                <ShieldCheck className="w-3 h-3" />
-                <span>Verified SHA-256</span>
-              </div>
+              {currentPlatformData.available ? (
+                <div className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded shrink-0">
+                  <ShieldCheck className="w-3 h-3" />
+                  <span>Free &amp; open</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#737373] bg-[#e8e6e2] border border-[#dcd9d0] px-2 py-0.5 rounded shrink-0">
+                  <span>Coming soon</span>
+                </div>
+              )}
             </div>
 
-            {/* Primary Download Button */}
-            <button
-              onClick={handleDownloadTrigger}
-              disabled={isDownloading}
-              className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 text-[13px] font-semibold uppercase tracking-wider text-[#faf9f7] bg-[#111111] rounded-[4px] hover:bg-[#2c2b29] transition-all shadow-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-[#111111]"
-            >
-              {isDownloading ? (
-                <>
-                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  <span>Preparing Binary ({currentPlatformData.name})...</span>
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  <span>Download for {currentPlatformData.name}</span>
-                </>
-              )}
-            </button>
+            {/* Primary Download Button — real GitHub Releases asset */}
+            {currentPlatformData.available ? (
+              <a
+                href={currentPlatformData.downloadUrl}
+                download
+                className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 text-[13px] font-semibold uppercase tracking-wider text-[#faf9f7] bg-[#111111] rounded-[4px] hover:bg-[#2c2b29] transition-all shadow-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-[#111111]"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download for {currentPlatformData.name}</span>
+              </a>
+            ) : (
+              <button
+                disabled
+                className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 text-[13px] font-semibold uppercase tracking-wider text-[#737373] bg-[#e8e6e2] rounded-[4px] cursor-not-allowed"
+              >
+                <span>{currentPlatformData.name} — Coming soon</span>
+              </button>
+            )}
 
-            {/* CLI Command Alternative */}
-            <div className="pt-3 border-t border-[#e8e6e2]">
-              <div className="flex items-center justify-between mb-1.5 text-[10px] font-bold font-mono uppercase tracking-wider text-[#737373]">
-                <span className="flex items-center gap-1">
-                  <Terminal className="w-3 h-3" />
-                  <span>Or install via Terminal</span>
-                </span>
-                <button
-                  onClick={() => handleCopy(currentPlatformData.cliCommand)}
-                  className="flex items-center gap-1 text-[#111111] hover:underline"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-600" />
-                      <span>Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" />
-                      <span>Copy command</span>
-                    </>
-                  )}
-                </button>
+            {/* Install guidance + SmartScreen note (only when a real binary exists) */}
+            {currentPlatformData.available && (
+              <div className="space-y-2 text-[12px] text-[#737373] leading-relaxed">
+                <p>
+                  Save the file, then double-click{' '}
+                  <span className="font-mono text-[#111111]">{currentPlatformData.primaryPackage}</span> in File
+                  Explorer to install — like any other Windows app.
+                </p>
+                <p className="flex items-start gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[#111111]" />
+                  <span>
+                    This build is self-signed, so Windows may show{' '}
+                    <span className="text-[#111111] font-medium">&ldquo;Windows protected your PC.&rdquo;</span> Click{' '}
+                    <span className="text-[#111111] font-medium">More info &rarr; Run anyway</span> to continue.
+                  </span>
+                </p>
               </div>
+            )}
 
-              <div className="p-3 bg-[#faf9f7] rounded border border-[#e8e6e2] font-mono text-[11px] text-[#111111] overflow-x-auto flex items-center justify-between">
-                <code>{currentPlatformData.cliCommand}</code>
-              </div>
+            {/* Direct-link fallback / all releases */}
+            <div className="pt-3 border-t border-[#e8e6e2] flex items-center justify-between text-[11px] font-mono text-[#737373]">
+              <span>{currentPlatformData.available ? 'Download not starting?' : 'Want another platform?'}</span>
+              <a
+                href={currentPlatformData.available ? currentPlatformData.downloadUrl : RELEASE.releasesUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[#111111] hover:underline"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>{currentPlatformData.available ? 'Direct link' : 'All releases on GitHub'}</span>
+              </a>
             </div>
           </div>
 
