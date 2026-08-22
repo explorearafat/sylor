@@ -67,11 +67,30 @@ describe('classifyIntent', () => {
     expect(getCompletion.mock.calls.length).toBe(before)
   })
 
-  it('parses valid JSON returned by the model', async () => {
+  it('short-circuits to the heuristic for a confident edit prompt (no LLM call)', async () => {
+    // A clear edit marker ("add") with no explain marker — the heuristic is
+    // confident, so no round-trip is spent classifying it.
+    const before = getCompletion.mock.calls.length
+    const result = await classifyIntent('Please add a dark mode toggle to settings', settings)
+    expect(result.kind).toBe('edit')
+    expect(result.needsContext).toBe(true)
+    expect(getCompletion.mock.calls.length).toBe(before)
+  })
+
+  it('short-circuits to the heuristic for a confident question prompt (no LLM call)', async () => {
+    // "how does" is a clear explain marker — classified without the LLM.
+    const before = getCompletion.mock.calls.length
+    const result = await classifyIntent('How does the routing layer work here?', settings)
+    expect(result.kind).toBe('question')
+    expect(getCompletion.mock.calls.length).toBe(before)
+  })
+
+  it('parses valid JSON returned by the model for an ambiguous prompt', async () => {
     getCompletion.mockResolvedValue(
       '{"kind":"edit","summary":"Add a dark mode toggle","needsContext":true}'
     )
-    const result = await classifyIntent('Please add a dark mode toggle to settings', settings)
+    // No edit/explain/chat markers → ambiguous → the LLM decides.
+    const result = await classifyIntent('The settings screen could feel more polished', settings)
     expect(result).toEqual({
       kind: 'edit',
       summary: 'Add a dark mode toggle',
@@ -83,7 +102,7 @@ describe('classifyIntent', () => {
     getCompletion.mockResolvedValue(
       'Sure!\n```json\n{"kind":"question","summary":"Understand routing","needsContext":false}\n```'
     )
-    const result = await classifyIntent('How does the routing layer work here?', settings)
+    const result = await classifyIntent('I keep getting lost in the routing layer', settings)
     expect(result.kind).toBe('question')
     expect(result.summary).toBe('Understand routing')
   })
@@ -92,16 +111,16 @@ describe('classifyIntent', () => {
     getCompletion.mockResolvedValue(
       '{"kind":"chat","summary":"You want to say hello","needsContext":false}'
     )
-    const result = await classifyIntent('Hey Sylor, how is it going today?', settings)
+    const result = await classifyIntent('Sylor, I appreciate the help so far', settings)
     expect(result.kind).toBe('chat')
     expect(result.needsContext).toBe(false)
   })
 
   it('falls back to the heuristic when the model returns unparseable output', async () => {
     getCompletion.mockResolvedValue('I cannot answer that.')
-    const result = await classifyIntent('Refactor the provider abstraction layer', settings)
-    // Heuristic sees "refactor" → edit.
-    expect(result.kind).toBe('edit')
+    // Ambiguous prompt → LLM path → unparseable → heuristic fallback (question).
+    const result = await classifyIntent('The provider abstraction layer bugs me', settings)
+    expect(result.kind).toBe('question')
   })
 
   it('falls back to the heuristic when the provider throws', async () => {

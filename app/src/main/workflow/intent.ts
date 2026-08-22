@@ -121,14 +121,36 @@ export function classifyIntentHeuristic(prompt: string): IntentAnalysis {
 }
 
 /**
- * Classifies intent using the active provider (a cheap 1-turn completion).
- * Falls back to the heuristic on any failure so the chat never blocks on this.
+ * Whether the cheap heuristic is confident enough to skip the LLM round-trip: a
+ * clear greeting, or a prompt carrying exactly one of the two signals — an edit
+ * marker XOR an explain marker. A prompt with no markers, or with both, is
+ * genuinely ambiguous and still earns the smarter LLM classification. This keeps
+ * the common case ("build/add/fix X", "explain/why X", "hi") instant instead of
+ * blocking generation on a separate classification call.
+ */
+function heuristicIsConfident(prompt: string): boolean {
+  const lower = prompt.toLowerCase().trim()
+  if (isChitChat(lower)) return true
+  const hasEdit = EDIT_MARKERS.some((m) => lower.includes(m))
+  const hasExplain = EXPLAIN_MARKERS.some((m) => lower.includes(m))
+  return hasEdit !== hasExplain
+}
+
+/**
+ * Classifies intent, preferring the cheap deterministic heuristic and only
+ * spending a provider round-trip when the prompt is genuinely ambiguous. Falls
+ * back to the heuristic on any failure so the chat never blocks on this.
  */
 export async function classifyIntent(
   prompt: string,
   settings: ProviderSettings
 ): Promise<IntentAnalysis> {
-  if (prompt.trim().length < 12) return classifyIntentHeuristic(prompt)
+  // Fast path: a very short prompt, or one the heuristic already reads
+  // confidently, is classified inline — no LLM latency before the model starts
+  // responding. Only a genuinely ambiguous prompt pays for the completion below.
+  if (prompt.trim().length < 12 || heuristicIsConfident(prompt)) {
+    return classifyIntentHeuristic(prompt)
+  }
 
   const provider = createProvider(
     settings.activeProvider,

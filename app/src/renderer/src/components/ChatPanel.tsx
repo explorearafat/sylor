@@ -11,7 +11,7 @@ import {
 import { DiffEditor } from '@monaco-editor/react'
 import {
   useChatStore,
-  type ActivityStep,
+  type ActivityStatus,
   type AgentCardUI,
   type ChatMessageUI,
   type OutgoingAttachment,
@@ -33,7 +33,6 @@ import { lineDiffStats, estimateTokens, formatCount } from '../lib/diff-stats'
 import type {
   AgentRole,
   Attachment,
-  IntentAnalysis,
   ToolDecision,
   ToolProposal,
   WorkflowStage
@@ -216,12 +215,12 @@ function formatTokens(tokens: number): string {
 }
 
 /**
- * Distinct line-style vector icon per workflow phase (requirement #2/#3): the
- * timeline reads at a glance as it advances (Understanding → Scanning → Reading →
- * Planning → Generating → Executing → Verifying → Done). Drawn with
- * `currentColor` so each inherits the row's active/muted tint. These label the
- * high-level phase; concrete file ops (read/edit/create/run) render as tool cards
- * in the prose, so the two never duplicate.
+ * Distinct line-style vector icon per workflow phase: the live status line reads
+ * at a glance as it advances (Understanding → Scanning → Reading → Planning →
+ * Generating → Executing → Verifying → Done). Drawn with `currentColor` so it
+ * inherits the status line's tint. These label the high-level phase; concrete file
+ * ops (read/edit/create/run) render as tool cards in the prose, so the two never
+ * duplicate.
  */
 function StageIcon({ stage }: { stage: WorkflowStage }): ReactNode {
   const base: SVGProps<SVGSVGElement> = {
@@ -295,78 +294,22 @@ function StageIcon({ stage }: { stage: WorkflowStage }): ReactNode {
 }
 
 /**
- * The contextual acknowledgment shown FIRST, before the activity timeline
- * (requirement #1): the engine's one-sentence restatement of what the user asked
- * for ("You want to…"), so the turn opens with task-specific natural language
- * rather than a bare spinner. Only for question/edit intents — casual chat needs
- * no preamble — and only while the turn is still working.
+ * The live status line shown at the BOTTOM of the active turn (Claude-Code style):
+ * a SINGLE evolving row — pulsing phase icon, the current phase message, elapsed
+ * time, and a rough token estimate — that re-labels itself as the engine advances
+ * (Understanding → Scanning → … → Generating → Executing …). It never accumulates
+ * rows and never shows a ✓, so it can't claim a phase finished that didn't, and it
+ * can't stack a second block of text above the model's own prose. The model's
+ * natural reply is the acknowledgment; this line only reports what is happening now.
  */
-function IntentLead({ intent }: { intent: IntentAnalysis | null }): ReactNode {
-  if (!intent || intent.kind === 'chat') return null
-  const summary = intent.summary.trim()
-  if (summary.length === 0) return null
-  return (
-    <div className="sylor-step-in mb-2 border-l-2 border-primary/30 pl-2.5 text-[12.5px] leading-relaxed text-muted">
-      {summary}
-    </div>
-  )
-}
-
-/** One completed/active row of the live timeline. */
-function ActivityRow({ step }: { step: ActivityStep }): ReactNode {
-  const active = !step.done
-  return (
-    <div className="sylor-step-in flex items-center gap-2 text-[12px]">
-      <span
-        className={
-          'grid h-5 w-5 shrink-0 place-items-center rounded ' +
-          (active ? 'sylor-blink bg-primary/12 text-primary' : 'text-emerald-500')
-        }
-      >
-        {step.done ? (
-          <svg
-            width="11"
-            height="11"
-            viewBox="0 0 16 16"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M3 8.5l3 3 7-7"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        ) : (
-          <StageIcon stage={step.stage} />
-        )}
-      </span>
-      <span className={active ? 'sylor-thinking font-medium' : 'text-muted/70'}>{step.message}</span>
-    </div>
-  )
-}
-
-/**
- * Claude-Code-style live execution timeline, shown at the BOTTOM of the active
- * turn (requirement #2/#4/#5): each `status` event the engine emits becomes a
- * row that appears as it happens, the current phase shimmering with a pulsing
- * icon and finished phases collapsing to a quiet green ✓ (requirement #7/#9).
- * The component stays mounted for the whole run — so the timer measures the true
- * turn duration — and simply grows its `activity` list. Only high-level phases
- * are shown; no private chain-of-thought (requirement #6). Older rows fold behind
- * a toggle so a long run stays compact (requirement #9/#14).
- */
-function ActivityTimeline({
-  activity,
+function StatusLine({
+  status,
   tokens
 }: {
-  activity: ActivityStep[]
+  status: ActivityStatus | null
   tokens: number
 }): ReactNode {
   const [elapsed, setElapsed] = useState(0)
-  const [showAll, setShowAll] = useState(false)
   const startRef = useRef(Date.now())
   useEffect(() => {
     const id = setInterval(() => {
@@ -375,29 +318,16 @@ function ActivityTimeline({
     return () => clearInterval(id)
   }, [])
 
-  const COLLAPSE_AT = 5
-  const hidden = !showAll && activity.length > COLLAPSE_AT ? activity.length - COLLAPSE_AT : 0
-  const visible = hidden > 0 ? activity.slice(activity.length - COLLAPSE_AT) : activity
+  const stage = status?.stage ?? 'understanding'
+  const message = status?.message ?? 'Thinking…'
 
   return (
-    <div className="mt-1.5" aria-live="polite">
-      {hidden > 0 && (
-        <button
-          type="button"
-          onClick={() => setShowAll(true)}
-          className="mb-1 ml-7 text-[11px] text-muted/70 transition-colors hover:text-muted"
-        >
-          Show {hidden} earlier step{hidden === 1 ? '' : 's'}
-        </button>
-      )}
-      <div className="flex flex-col gap-1">
-        {visible.length === 0 ? (
-          <ActivityRow step={{ id: 'boot', stage: 'understanding', message: 'Thinking…', done: false }} />
-        ) : (
-          visible.map((step) => <ActivityRow key={step.id} step={step} />)
-        )}
-      </div>
-      <div className="mt-1 ml-7 flex items-center gap-2 text-[11px] text-muted">
+    <div className="mt-1.5 flex items-center gap-2 text-[12px]" aria-live="polite">
+      <span className="sylor-blink grid h-5 w-5 shrink-0 place-items-center rounded bg-primary/12 text-primary">
+        <StageIcon stage={stage} />
+      </span>
+      <span className="sylor-thinking min-w-0 truncate font-medium">{message}</span>
+      <span className="ml-0.5 flex shrink-0 items-center gap-1.5 text-[11px] text-muted">
         <span className="tabular-nums">{formatElapsed(elapsed)}</span>
         {tokens > 0 && (
           <>
@@ -407,7 +337,7 @@ function ActivityTimeline({
             <span className="tabular-nums">~{formatTokens(tokens)} tokens</span>
           </>
         )}
-      </div>
+      </span>
     </div>
   )
 }
@@ -787,9 +717,8 @@ interface MessageProps {
   message: ChatMessageUI
   /** Whether this is the active (last, streaming) assistant message. */
   isActive: boolean
-  intent: IntentAnalysis | null
-  /** Ordered live activity timeline for the active run (progressive phases). */
-  activity: ActivityStep[]
+  /** The live status of the active run — a single evolving phase line. */
+  status: ActivityStatus | null
   /** Lead (top-level) tool cards anchored beneath this message, in stream order. */
   cards: ToolCardUI[]
   /** Subagent cards anchored beneath this message (requirement B), in stream order. */
@@ -1050,8 +979,7 @@ function UserMessage({ message, attachments }: MessageProps) {
 function AssistantMessage({
   message,
   isActive,
-  intent,
-  activity,
+  status,
   cards,
   agents,
   agentTools
@@ -1105,9 +1033,6 @@ function AssistantMessage({
           </div>
         )}
 
-        {/* Contextual acknowledgment, shown before the timeline (requirement #1). */}
-        {isActive && message.pending && <IntentLead intent={intent} />}
-
         {blocks.length > 0 && (
           <div className="min-w-0">
             {blocks.map((block, i) =>
@@ -1131,7 +1056,7 @@ function AssistantMessage({
         )}
 
         {isActive && message.pending && (
-          <ActivityTimeline activity={activity} tokens={tokenEstimate} />
+          <StatusLine status={status} tokens={tokenEstimate} />
         )}
 
         {!message.pending && (displayContent.length > 0 || message.error != null) && (
@@ -1401,8 +1326,7 @@ export function ChatPanel() {
   const agents = useChatStore((s) => s.agents)
   const attachments = useChatStore((s) => s.attachments)
   const running = useChatStore((s) => s.running)
-  const intent = useChatStore((s) => s.intent)
-  const activity = useChatStore((s) => s.activity)
+  const status = useChatStore((s) => s.status)
   const send = useChatStore((s) => s.send)
   const sessionId = useChatStore((s) => s.sessionId)
   const decideTool = useChatStore((s) => s.decideTool)
@@ -1630,8 +1554,7 @@ export function ChatPanel() {
                 key={message.id}
                 message={message}
                 isActive={message.id === lastId && message.role === 'assistant'}
-                intent={intent}
-                activity={activity}
+                status={status}
                 cards={leadCardsByMessage.get(message.id) ?? []}
                 agents={agentsByMessage.get(message.id) ?? []}
                 agentTools={toolsByAgent}
