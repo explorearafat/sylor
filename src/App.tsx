@@ -24,6 +24,7 @@ import { DownloadModal } from './components/DownloadModal';
 import { GeometricReveal } from './components/GeometricReveal';
 import { ScrollProgressBar, BackToTop } from './components/ScrollProgressBar';
 import { QuickCommandPalette } from './components/QuickCommandPalette';
+import { AmbientBackground } from './components/AmbientBackground';
 
 export default function App() {
   const [isManifestOpen, setIsManifestOpen] = useState(false);
@@ -35,8 +36,10 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#faf9f7] text-[#141413] flex flex-col antialiased selection:bg-[#141413] selection:text-[#faf9f7]">
-      
+    <div className="min-h-screen text-[#141413] flex flex-col antialiased selection:bg-[#141413] selection:text-[#faf9f7]">
+
+      <AmbientBackground />
+
       <ScrollProgressBar />
 
       
