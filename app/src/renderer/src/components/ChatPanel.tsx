@@ -1,8 +1,17 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type SVGProps
+} from 'react'
 import { DiffEditor } from '@monaco-editor/react'
 import {
   useChatStore,
-  type ActivityStatus,
+  type ActivityStep,
   type AgentCardUI,
   type ChatMessageUI,
   type OutgoingAttachment,
@@ -26,7 +35,8 @@ import type {
   Attachment,
   IntentAnalysis,
   ToolDecision,
-  ToolProposal
+  ToolProposal,
+  WorkflowStage
 } from '@shared/types'
 
 /** Human-readable byte size for an attachment chip (e.g. "12.4 KB"). */
@@ -206,16 +216,157 @@ function formatTokens(tokens: number): string {
 }
 
 /**
- * Claude-Code-style live status line, shown at the BOTTOM of the active turn for
- * the entire run: a pulsing Sylor mark, the current activity verb (shimmering),
- * the elapsed time, and a rough running token estimate. It stays mounted across
- * every step — so the timer measures the true turn duration — and simply
- * re-labels as the engine's status changes (Thinking → Planning → Applying →
- * Continuing the build → …). This replaces the old split of a one-shot
- * "Thinking…" plus a separate top chip that appeared to flicker on each step.
+ * Distinct line-style vector icon per workflow phase (requirement #2/#3): the
+ * timeline reads at a glance as it advances (Understanding → Scanning → Reading →
+ * Planning → Generating → Executing → Verifying → Done). Drawn with
+ * `currentColor` so each inherits the row's active/muted tint. These label the
+ * high-level phase; concrete file ops (read/edit/create/run) render as tool cards
+ * in the prose, so the two never duplicate.
  */
-function LiveActivity({ status, tokens }: { status: ActivityStatus | null; tokens: number }): ReactNode {
+function StageIcon({ stage }: { stage: WorkflowStage }): ReactNode {
+  const base: SVGProps<SVGSVGElement> = {
+    width: 12,
+    height: 12,
+    viewBox: '0 0 16 16',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.4,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true
+  }
+  switch (stage) {
+    case 'understanding': // compass — getting oriented
+      return (
+        <svg {...base}>
+          <circle cx="8" cy="8" r="5.5" />
+          <path d="M10.6 5.4 8.7 8.7 5.4 10.6 7.3 7.3z" />
+        </svg>
+      )
+    case 'scanning': // magnifying glass — searching the tree
+      return (
+        <svg {...base}>
+          <circle cx="7" cy="7" r="3.8" />
+          <path d="M9.8 9.8 13.5 13.5" />
+        </svg>
+      )
+    case 'reading': // open book
+      return (
+        <svg {...base}>
+          <path d="M8 4.7C6.6 3.6 4.9 3.3 3 3.4v8c1.9-.1 3.6.2 5 1.3 1.4-1.1 3.1-1.4 5-1.3v-8c-1.9-.1-3.6.2-5 1.3z" />
+          <path d="M8 4.7v8" />
+        </svg>
+      )
+    case 'planning': // checklist / document
+      return (
+        <svg {...base}>
+          <rect x="3.5" y="2.5" width="9" height="11" rx="1.2" />
+          <path d="M5.8 6.2h4.4M5.8 8.6h4.4M5.8 11h2.6" />
+        </svg>
+      )
+    case 'generating': // sparkle
+      return (
+        <svg {...base}>
+          <path d="M8 2.4c.35 2.7 1.05 3.4 3.6 3.6-2.55.2-3.25.9-3.6 3.6-.35-2.7-1.05-3.4-3.6-3.6 2.55-.2 3.25-.9 3.6-3.6z" />
+          <path d="M12.2 10.3c.15 1.1.45 1.4 1.4 1.4-.95.05-1.25.35-1.4 1.4-.15-1.05-.45-1.35-1.4-1.4.95 0 1.25-.3 1.4-1.4z" />
+        </svg>
+      )
+    case 'executing': // lightning bolt
+      return (
+        <svg {...base}>
+          <path d="M9 2 4 9h3.2l-1 5 5-7.2H8z" />
+        </svg>
+      )
+    case 'verifying': // flask
+      return (
+        <svg {...base}>
+          <path d="M6.5 2.5v3.7L3.7 11.8a1 1 0 0 0 .9 1.4h6.8a1 1 0 0 0 .9-1.4L9.5 6.2V2.5" />
+          <path d="M6 2.5h4M5.2 9.3h5.6" />
+        </svg>
+      )
+    case 'done': // check in a circle
+      return (
+        <svg {...base}>
+          <circle cx="8" cy="8" r="5.5" />
+          <path d="M5.6 8.1 7.3 9.8 10.6 6.2" />
+        </svg>
+      )
+  }
+}
+
+/**
+ * The contextual acknowledgment shown FIRST, before the activity timeline
+ * (requirement #1): the engine's one-sentence restatement of what the user asked
+ * for ("You want to…"), so the turn opens with task-specific natural language
+ * rather than a bare spinner. Only for question/edit intents — casual chat needs
+ * no preamble — and only while the turn is still working.
+ */
+function IntentLead({ intent }: { intent: IntentAnalysis | null }): ReactNode {
+  if (!intent || intent.kind === 'chat') return null
+  const summary = intent.summary.trim()
+  if (summary.length === 0) return null
+  return (
+    <div className="sylor-step-in mb-2 border-l-2 border-primary/30 pl-2.5 text-[12.5px] leading-relaxed text-muted">
+      {summary}
+    </div>
+  )
+}
+
+/** One completed/active row of the live timeline. */
+function ActivityRow({ step }: { step: ActivityStep }): ReactNode {
+  const active = !step.done
+  return (
+    <div className="sylor-step-in flex items-center gap-2 text-[12px]">
+      <span
+        className={
+          'grid h-5 w-5 shrink-0 place-items-center rounded ' +
+          (active ? 'sylor-blink bg-primary/12 text-primary' : 'text-emerald-500')
+        }
+      >
+        {step.done ? (
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M3 8.5l3 3 7-7"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        ) : (
+          <StageIcon stage={step.stage} />
+        )}
+      </span>
+      <span className={active ? 'sylor-thinking font-medium' : 'text-muted/70'}>{step.message}</span>
+    </div>
+  )
+}
+
+/**
+ * Claude-Code-style live execution timeline, shown at the BOTTOM of the active
+ * turn (requirement #2/#4/#5): each `status` event the engine emits becomes a
+ * row that appears as it happens, the current phase shimmering with a pulsing
+ * icon and finished phases collapsing to a quiet green ✓ (requirement #7/#9).
+ * The component stays mounted for the whole run — so the timer measures the true
+ * turn duration — and simply grows its `activity` list. Only high-level phases
+ * are shown; no private chain-of-thought (requirement #6). Older rows fold behind
+ * a toggle so a long run stays compact (requirement #9/#14).
+ */
+function ActivityTimeline({
+  activity,
+  tokens
+}: {
+  activity: ActivityStep[]
+  tokens: number
+}): ReactNode {
   const [elapsed, setElapsed] = useState(0)
+  const [showAll, setShowAll] = useState(false)
   const startRef = useRef(Date.now())
   useEffect(() => {
     const id = setInterval(() => {
@@ -224,24 +375,39 @@ function LiveActivity({ status, tokens }: { status: ActivityStatus | null; token
     return () => clearInterval(id)
   }, [])
 
+  const COLLAPSE_AT = 5
+  const hidden = !showAll && activity.length > COLLAPSE_AT ? activity.length - COLLAPSE_AT : 0
+  const visible = hidden > 0 ? activity.slice(activity.length - COLLAPSE_AT) : activity
+
   return (
-    <div className="mt-1.5 flex items-center gap-2 text-[12px] text-muted" aria-live="polite">
-      <span className="sylor-blink grid h-5 w-5 shrink-0 place-items-center rounded bg-primary/12">
-        <SylorLogo size={13} showBubbles={false} />
-      </span>
-      <span className="sylor-thinking font-medium">{status?.message ?? 'Thinking…'}</span>
-      <span aria-hidden className="text-muted/50">
-        ·
-      </span>
-      <span className="tabular-nums">{formatElapsed(elapsed)}</span>
-      {tokens > 0 && (
-        <>
-          <span aria-hidden className="text-muted/50">
-            ·
-          </span>
-          <span className="tabular-nums">~{formatTokens(tokens)} tokens</span>
-        </>
+    <div className="mt-1.5" aria-live="polite">
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="mb-1 ml-7 text-[11px] text-muted/70 transition-colors hover:text-muted"
+        >
+          Show {hidden} earlier step{hidden === 1 ? '' : 's'}
+        </button>
       )}
+      <div className="flex flex-col gap-1">
+        {visible.length === 0 ? (
+          <ActivityRow step={{ id: 'boot', stage: 'understanding', message: 'Thinking…', done: false }} />
+        ) : (
+          visible.map((step) => <ActivityRow key={step.id} step={step} />)
+        )}
+      </div>
+      <div className="mt-1 ml-7 flex items-center gap-2 text-[11px] text-muted">
+        <span className="tabular-nums">{formatElapsed(elapsed)}</span>
+        {tokens > 0 && (
+          <>
+            <span aria-hidden className="text-muted/50">
+              ·
+            </span>
+            <span className="tabular-nums">~{formatTokens(tokens)} tokens</span>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -622,7 +788,8 @@ interface MessageProps {
   /** Whether this is the active (last, streaming) assistant message. */
   isActive: boolean
   intent: IntentAnalysis | null
-  status: ActivityStatus | null
+  /** Ordered live activity timeline for the active run (progressive phases). */
+  activity: ActivityStep[]
   /** Lead (top-level) tool cards anchored beneath this message, in stream order. */
   cards: ToolCardUI[]
   /** Subagent cards anchored beneath this message (requirement B), in stream order. */
@@ -883,7 +1050,8 @@ function UserMessage({ message, attachments }: MessageProps) {
 function AssistantMessage({
   message,
   isActive,
-  status,
+  intent,
+  activity,
   cards,
   agents,
   agentTools
@@ -937,6 +1105,9 @@ function AssistantMessage({
           </div>
         )}
 
+        {/* Contextual acknowledgment, shown before the timeline (requirement #1). */}
+        {isActive && message.pending && <IntentLead intent={intent} />}
+
         {blocks.length > 0 && (
           <div className="min-w-0">
             {blocks.map((block, i) =>
@@ -959,7 +1130,9 @@ function AssistantMessage({
           </div>
         )}
 
-        {isActive && message.pending && <LiveActivity status={status} tokens={tokenEstimate} />}
+        {isActive && message.pending && (
+          <ActivityTimeline activity={activity} tokens={tokenEstimate} />
+        )}
 
         {!message.pending && (displayContent.length > 0 || message.error != null) && (
           <MessageActions message={message} />
@@ -1229,7 +1402,7 @@ export function ChatPanel() {
   const attachments = useChatStore((s) => s.attachments)
   const running = useChatStore((s) => s.running)
   const intent = useChatStore((s) => s.intent)
-  const status = useChatStore((s) => s.status)
+  const activity = useChatStore((s) => s.activity)
   const send = useChatStore((s) => s.send)
   const sessionId = useChatStore((s) => s.sessionId)
   const decideTool = useChatStore((s) => s.decideTool)
@@ -1458,7 +1631,7 @@ export function ChatPanel() {
                 message={message}
                 isActive={message.id === lastId && message.role === 'assistant'}
                 intent={intent}
-                status={status}
+                activity={activity}
                 cards={leadCardsByMessage.get(message.id) ?? []}
                 agents={agentsByMessage.get(message.id) ?? []}
                 agentTools={toolsByAgent}

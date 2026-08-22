@@ -10,7 +10,8 @@ import type {
   ToolProposal,
   ToolResult,
   WorkflowEvent,
-  WorkflowRunRequest
+  WorkflowRunRequest,
+  WorkflowStage
 } from '../../shared/types'
 import { providerFromSettings, type Provider } from '../providers'
 import { toErrorMessage } from '../providers/http'
@@ -527,7 +528,7 @@ export async function runWorkflow(
     // 2. Gather project context when the intent calls for it.
     let overview = ''
     if (intent.needsContext) {
-      emit({ type: 'status', runId, stage: 'scanning', message: 'Scanning project structure…' })
+      emit({ type: 'status', runId, stage: 'scanning', message: 'Scanning the project structure…' })
       const files = contextManager.listFiles()
       if (controller.signal.aborted) return
 
@@ -535,7 +536,7 @@ export async function runWorkflow(
         type: 'status',
         runId,
         stage: 'reading',
-        message: `Reading key files… (${files.length} files indexed)`
+        message: files.length > 0 ? `Reading ${describeFiles(files)}` : 'Reading files for context…'
       })
       overview = contextManager.buildOverview()
       if (controller.signal.aborted) return
@@ -880,7 +881,8 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<string> {
     // its structured outcome so the results can be fed back to the model.
     const outcomes: Array<{ tool: SideEffectTool; result: ToolResult }> = []
     if (sideEffects.length > 0) {
-      emit({ type: 'status', runId, stage: 'executing', message: 'Applying changes…' })
+      const batch = describeBatch(sideEffects)
+      emit({ type: 'status', runId, stage: batch.stage, message: batch.message })
       for (const tool of sideEffects) {
         if (signal.aborted) return report
         const result = await executeTool(tool, { runId, permissionMode, handle, emit, onTerminal })
@@ -1195,6 +1197,71 @@ async function applyTool(
 
   const { exitCode, output, truncated } = await runCommand(proposal.command, onTerminal, signal)
   return { id: proposal.id, kind: 'run_command', exitCode, output, truncated }
+}
+
+/** Last path segment of a POSIX-relative path (its basename), for compact labels. */
+function baseName(path: string): string {
+  const i = path.lastIndexOf('/')
+  return i >= 0 ? path.slice(i + 1) : path
+}
+
+/**
+ * A short, human label for the files being read — the first few basenames plus a
+ * "+N more" tail — so the live "Reading…" status names real files (requirement
+ * #3) rather than a bare count. Purely cosmetic: drawn from the already-built
+ * file index, never the file contents.
+ */
+function describeFiles(files: string[]): string {
+  const names = files.map(baseName).filter(Boolean)
+  const head = names.slice(0, 3).join(', ')
+  const rest = names.length - 3
+  const label = rest > 0 ? `${head} +${rest} more` : head
+  return `${label} (${files.length} file${files.length === 1 ? '' : 's'})`
+}
+
+/** Matches a command that is clearly a verification/build step, not a mutation. */
+const VERIFY_RE = /\b(tests?|vitest|jest|typecheck|tsc|lint|eslint|build|check)\b/i
+
+/**
+ * Picks the phase + label for a batch of side-effecting tools about to run, so the
+ * timeline shows a real, contextual step (requirement #2/#3): a command batch
+ * that's clearly a check (test/build/lint/typecheck) reads as the `verifying`
+ * phase; otherwise it's `executing`, with the concrete files or command named.
+ * Exactly one status per batch — the per-tool cards carry the detail — so the
+ * engine's status stream stays single-emission per step.
+ */
+function describeBatch(tools: SideEffectTool[]): { stage: WorkflowStage; message: string } {
+  const commands = tools.filter(
+    (t): t is Extract<SideEffectTool, { tool: 'run_command' }> => t.tool === 'run_command'
+  )
+  const writes = tools.filter(
+    (t): t is Extract<SideEffectTool, { tool: 'write_file' }> => t.tool === 'write_file'
+  )
+  const firstCmd = (): string => commands[0].command.trim().split(/\s+/).slice(0, 3).join(' ')
+
+  // A command batch that's purely checks/builds → the verifying phase.
+  if (commands.length > 0 && writes.length === 0 && commands.every((c) => VERIFY_RE.test(c.command))) {
+    return {
+      stage: 'verifying',
+      message: commands.length === 1 ? `Verifying · ${firstCmd()}` : `Verifying · ${commands.length} checks`
+    }
+  }
+  // Pure writes → name the files being edited/created.
+  if (writes.length > 0 && commands.length === 0) {
+    const names = writes.map((w) => baseName(w.path))
+    const head = names.slice(0, 2).join(', ')
+    const rest = names.length - 2
+    return { stage: 'executing', message: `Editing ${rest > 0 ? `${head} +${rest} more` : head}` }
+  }
+  // Pure commands (not all checks) → name the command.
+  if (commands.length > 0 && writes.length === 0) {
+    return {
+      stage: 'executing',
+      message: commands.length === 1 ? `Running ${firstCmd()}` : `Running ${commands.length} commands`
+    }
+  }
+  // Mixed / MCP batch → a generic apply.
+  return { stage: 'executing', message: 'Applying changes…' }
 }
 
 /**

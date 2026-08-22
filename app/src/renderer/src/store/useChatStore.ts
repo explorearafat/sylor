@@ -122,6 +122,37 @@ export interface ActivityStatus {
 }
 
 /**
+ * One step in the live activity timeline. Every `status` event the engine emits
+ * appends a step; the previous step is marked `done` the moment the next arrives,
+ * so the UI can render completed phases quietly (with a ✓) and the current phase
+ * as active. This turns the engine's already-real status stream into the
+ * progressive, sequential timeline the UI shows (Understanding → Reading →
+ * Planning → …) instead of a single re-labeling line. Renderer-only UI state:
+ * never persisted and never an IPC payload — derived entirely from live events.
+ */
+export interface ActivityStep {
+  id: string
+  stage: WorkflowStage
+  message: string
+  done: boolean
+}
+
+/**
+ * Append a status to the activity timeline, marking the prior step done. A status
+ * identical to the current tail (same stage AND message) is a no-op — the engine
+ * can re-emit the same phase and we don't want duplicate rows. Returns the same
+ * array reference when nothing changed so callers can skip a needless re-render.
+ */
+function appendActivity(list: ActivityStep[], stage: WorkflowStage, message: string): ActivityStep[] {
+  const last = list[list.length - 1]
+  if (last && last.stage === stage && last.message === message) return list
+  const next =
+    last && !last.done ? [...list.slice(0, -1), { ...last, done: true }] : [...list]
+  next.push({ id: nextActivityId(), stage, message, done: false })
+  return next
+}
+
+/**
  * An attachment being sent with a user turn. `textContent` is the decoded body
  * for text-like files (read by the composer), inlined into the engine history so
  * the model can see the file; binary/image files carry only metadata and are
@@ -155,6 +186,8 @@ interface LiveRun {
   agents: AgentCardUI[]
   /** Latest activity status, mirrored to the store while visible. */
   status: ActivityStatus | null
+  /** Ordered activity timeline (one step per distinct status), mirrored while visible. */
+  activity: ActivityStep[]
   /** Intent interpretation for this run. */
   intent: IntentAnalysis | null
   /** Cancels the main-process run and detaches its event listener. */
@@ -188,6 +221,12 @@ export interface ChatState {
   runId: string | null
   /** Live activity status ("Reading files…"), or null. */
   status: ActivityStatus | null
+  /**
+   * Ordered live activity timeline for the active run — the progressive sequence
+   * of phases (Understanding → Reading → Planning → …) the UI renders in place of
+   * a single spinner. Empty when idle.
+   */
+  activity: ActivityStep[]
   /** The intent interpretation for the active/last run ("You want to…"). */
   intent: IntentAnalysis | null
   /** Disposer for the active run's event subscription. */
@@ -237,6 +276,8 @@ let idCounter = 0
 const nextId = (): string => `msg-${++idCounter}`
 let runCounter = 0
 const nextRunId = (): string => `run-${++runCounter}`
+let activityCounter = 0
+const nextActivityId = (): string => `act-${++activityCounter}`
 
 /**
  * After rehydrating persisted ids ('msg-7', 'run-3'), advance the in-memory
@@ -341,6 +382,7 @@ function projectLiveRun(
   runId: string | null
   disposer: (() => void) | null
   status: ActivityStatus | null
+  activity: ActivityStep[]
   intent: IntentAnalysis | null
 } {
   const run = sessionId ? liveRuns.get(sessionId) : undefined
@@ -354,6 +396,7 @@ function projectLiveRun(
       runId: null,
       disposer: null,
       status: null,
+      activity: [],
       intent: null
     }
   }
@@ -382,6 +425,7 @@ function projectLiveRun(
     runId: run.runId,
     disposer: run.disposer,
     status: run.status,
+    activity: run.activity,
     intent: run.intent
   }
 }
@@ -422,6 +466,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       tools: [],
       agents: [],
       status: null,
+      activity: [],
       intent: null,
       disposer: () => {},
       buffer: '',
@@ -507,7 +552,8 @@ export const useChatStore = create<ChatState>((set, get) => {
           // streamed prose convey progress instead.
           if (event.agentId) break
           run.status = { stage: event.stage, message: event.message }
-          if (isVisible()) set({ status: run.status })
+          run.activity = appendActivity(run.activity, event.stage, event.message)
+          if (isVisible()) set({ status: run.status, activity: run.activity })
           break
         case 'delta':
           // Buffer; the flush timer applies it in coalesced batches (see above).
@@ -609,10 +655,15 @@ export const useChatStore = create<ChatState>((set, get) => {
           // Surface the hand-off on the top-level line; the lead is blocked here
           // until the subagent reports back, so this stays put meanwhile.
           run.status = { stage: 'generating', message: `Delegating to the ${event.role}…` }
+          run.activity = appendActivity(run.activity, 'generating', run.status.message)
           if (isVisible()) {
             // Push a copy so the store and the run's source-of-truth card never
             // share a mutable reference (flush updates each independently).
-            set((state) => ({ agents: [...state.agents, { ...card }], status: run.status }))
+            set((state) => ({
+              agents: [...state.agents, { ...card }],
+              status: run.status,
+              activity: run.activity
+            }))
           }
           break
         }
@@ -661,6 +712,7 @@ export const useChatStore = create<ChatState>((set, get) => {
               ),
               running: false,
               status: null,
+              activity: [],
               runId: null,
               disposer: null
             }))
@@ -698,6 +750,7 @@ export const useChatStore = create<ChatState>((set, get) => {
               ),
               running: false,
               status: null,
+              activity: [],
               runId: null,
               disposer: null
             }))
@@ -743,6 +796,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     running: false,
     runId: null,
     status: null,
+    activity: [],
     intent: null,
     disposer: null,
     sessionId: null,
@@ -789,6 +843,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         attachments: [...state.attachments, ...bound],
         running: true,
         status: null,
+        activity: [],
         intent: null
       }))
 
@@ -842,6 +897,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         agents: state.agents.map((a) => (a.status === 'running' ? { ...a, status: 'complete' } : a)),
         running: false,
         status: null,
+        activity: [],
         runId: null,
         disposer: null
       }))
@@ -856,6 +912,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         attachments: [],
         running: false,
         status: null,
+        activity: [],
         intent: null,
         runId: null,
         disposer: null
@@ -921,6 +978,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         agents: state.agents.filter((a) => a.afterMessageId !== messageId),
         running: true,
         status: null,
+        activity: [],
         intent: null
       }))
       // Clear the persisted copy so a reload shows only the regenerated result.
